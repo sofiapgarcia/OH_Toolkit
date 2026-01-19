@@ -1,26 +1,32 @@
 # OH Stats: Complete Learning & Reference Guide
 
-> **A comprehensive guide to statistical analysis of Occupational Health data**  
-> For beginners learning statistics AND practitioners needing a reference
+\begin{center}
+\Large\textbf{A comprehensive guide to statistical analysis of Occupational Health data}\\[0.5em]
+\normalsize For beginners learning statistics AND practitioners needing a reference
+\end{center}
 
 ---
 
 ## How to Use This Guide
 
-This guide serves two purposes:
+\begin{tcolorbox}[colback=infobg, colframe=infoblue, title={\faIcon{compass} Navigation Guide}, fonttitle=\bfseries, left=8pt, right=8pt]
+\textbf{Learning statistics?} $\rightarrow$ Start with Part I, read sequentially\\[0.3em]
+\textbf{Running an analysis?} $\rightarrow$ Jump to Part II for step-by-step workflow\\[0.3em]
+\textbf{Troubleshooting?} $\rightarrow$ Part IV has solutions to common problems\\[0.3em]
+\textbf{Writing a paper?} $\rightarrow$ Part III has reporting templates
+\end{tcolorbox}
 
-| If you're... | Start with... | Then use... |
-|--------------|---------------|-------------|
-| **Learning statistics** | Part I (Foundations) | Read sequentially, follow examples |
-| **Running an analysis** | Part II (Workflow) | Jump to specific sections as needed |
-| **Troubleshooting** | Part IV (Edge Cases) | Search for your specific issue |
-| **Writing a paper** | Part III (Interpretation) | Reporting templates and checklists |
+\vspace{1em}
 
 ---
 
+\newpage
+
 # PART I: Statistical Foundations
 
-*Everything you need to understand WHY we use these methods*
+\begin{center}
+\textit{Everything you need to understand WHY we use these methods}
+\end{center}
 
 ---
 
@@ -31,39 +37,37 @@ This guide serves two purposes:
 An OH (Occupational Health) profile contains multiple types of data collected from workers:
 
 | Data Type | Examples | Measurement Scale |
-|-----------|----------|-------------------|
+|:----------|:---------|:------------------|
 | **Sensor metrics** | EMG, accelerometer, heart rate, noise | Continuous (numeric) |
-| **Questionnaires** | COPSOQ, MUEQ, ROSA, IPAQ, OSPAQ | Ordinal or Continuous (composite scores) |
+| **Questionnaires** | COPSOQ, MUEQ, ROSA, IPAQ, OSPAQ | Ordinal or Continuous |
 | **Daily self-reports** | Workload, pain ratings (NPRS) | Ordinal (Likert 1-5, NPRS 0-10) |
 | **Environmental** | Temperature, humidity | Continuous |
 
-### The Unit of Analysis: Subject × Day
+### The Unit of Analysis: Subject x Day
 
-Your primary unit of analysis is **one subject on one day**.
-
-```
+\begin{tcolorbox}[colback=tipbg, colframe=tipgreen, title={\faIcon{lightbulb} Key Concept}, fonttitle=\bfseries]
+Your primary unit of analysis is \textbf{one subject on one day}.\\[0.5em]
 Each row in your analysis = one person's measurements for one day
-```
+\end{tcolorbox}
 
 **Key points:**
+
 - Each subject contributes **daily aggregated metrics** (e.g., average EMG over the whole day)
-- The data are **naturally unbalanced** - some subjects have 3 days, others have 5
+- The data are **naturally unbalanced** -- some subjects have 3 days, others have 5
 - You analyze **each modality separately** (EMG models don't mix with posture or HR models)
 
 ### The Two-Package Ecosystem
 
-```
-oh_parser                          oh_stats
----------                          --------
-Load JSON profiles                 Prepare analysis tables
-Extract ANY modality metrics  -->  Check data quality
-Clean & validate data              Fit statistical models
-                                   Correct for multiple testing
-                                   Generate reports
-```
-
-**oh_parser** extracts and validates your data from JSON profiles.  
-**oh_stats** answers your research questions about that data.
+\begin{center}
+\begin{tikzpicture}[
+    box/.style={draw, rounded corners, minimum width=3.5cm, minimum height=1.5cm, align=center, font=\small},
+    arrow/.style={->, thick, >=stealth}
+]
+\node[box, fill=infobg] (parser) at (0,0) {\textbf{oh\_parser}\\Load JSON profiles\\Extract metrics\\Clean \& validate};
+\node[box, fill=tipbg] (stats) at (6,0) {\textbf{oh\_stats}\\Prepare tables\\Fit models\\Correct p-values\\Generate reports};
+\draw[arrow] (parser) -- (stats);
+\end{tikzpicture}
+\end{center}
 
 ---
 
@@ -71,8 +75,7 @@ Clean & validate data              Fit statistical models
 
 ### The Setup
 
-Imagine you're studying muscle fatigue in office workers. You measure their EMG (muscle activity) 
-every day for a week. Your question: **Does muscle activity change over the week?**
+Imagine you're studying muscle fatigue in office workers. You measure their EMG (muscle activity) every day for a week. Your question: **Does muscle activity change over the week?**
 
 Your data looks like this:
 
@@ -82,31 +85,24 @@ Subject  Day  EMG_value
 Alice     1       10.2
 Alice     2        9.8
 Alice     3        8.5
-Alice     4        7.2
-Alice     5        6.9
 Bob       1       15.1
 Bob       2       14.8
-Bob       3       13.2
 ...
 ```
 
 ### The Independence Problem
 
-**The Problem**: Alice's measurements are all related to each other. If Alice naturally has low 
-muscle activity, ALL her measurements will be lower. Bob might naturally have high activity, 
-so ALL his will be higher.
+\begin{tcolorbox}[colback=dangerbg, colframe=dangerred, title={\faIcon{exclamation-circle} The Problem}, fonttitle=\bfseries]
+Alice's measurements are all related to each other. If Alice naturally has low muscle activity, ALL her measurements will be lower.\\[0.5em]
+T-tests assume \textbf{every measurement is independent} -- like flipping a coin. But Alice's Day 2 is NOT independent from Alice's Day 1.
+\end{tcolorbox}
 
-T-tests and basic ANOVA assume **every measurement is independent** - like flipping a coin. 
-But Alice's Day 2 is NOT independent from Alice's Day 1. They're both "Alice measurements."
-
-**Mathematically**: The independence assumption fails because Cov(Y_Alice,Day1, Y_Alice,Day2) ≠ 0.
+**Mathematically**: The independence assumption fails because Cov(Y~Alice,Day1~, Y~Alice,Day2~) $\neq$ 0.
 
 ### What Happens If We Ignore This?
 
-When we pretend related measurements are independent, we get:
-
 | Problem | Effect |
-|---------|--------|
+|:--------|:-------|
 | **Inflated sample size** | We count 320 observations, but really have ~37 independent subjects |
 | **Too-small p-values** | Standard errors underestimated, leading to false confidence |
 | **False discoveries** | We "find" effects that aren't real |
@@ -114,14 +110,10 @@ When we pretend related measurements are independent, we get:
 
 ### The Coin Flip Analogy
 
-Imagine you want to know if a coin is fair. You flip it 100 times and get 52 heads. 
-That's reasonable - probably fair.
-
-Now imagine you flip it 10 times, but you COUNT EACH FLIP 10 TIMES. You now have 
-"100 observations" but really only 10 independent flips. If you got 6 heads in those 
-10 real flips, you'd report 60 heads in "100 flips" - and wrongly conclude the coin is biased!
-
-**That's exactly what happens when you use t-tests on repeated measures data.**
+\begin{tcolorbox}[colback=warningbg, colframe=warningyellow, title={\faIcon{exclamation-triangle} Analogy}, fonttitle=\bfseries]
+Imagine you flip a coin 10 times, but you \textbf{count each flip 10 times}. You now have "100 observations" but really only 10 independent flips. If you got 6 heads in those 10 real flips, you'd report 60 heads in "100 flips" -- and wrongly conclude the coin is biased!\\[0.5em]
+\textbf{That's exactly what happens when you use t-tests on repeated measures data.}
+\end{tcolorbox}
 
 ---
 
@@ -129,74 +121,69 @@ Now imagine you flip it 10 times, but you COUNT EACH FLIP 10 TIMES. You now have
 
 ### The Key Idea
 
-Linear Mixed Models (LMMs) solve this by recognizing TWO sources of variation:
+Linear Mixed Models (LMMs) solve this by recognizing **TWO sources of variation**:
 
-1. **Between-subject variation**: Alice vs Bob differences (some people naturally have higher/lower values)
-2. **Within-subject variation**: Day-to-day changes for the same person
+\begin{center}
+\fbox{\parbox{0.8\textwidth}{
+\centering
+\textbf{Total variation} = Between-subject variation + Within-subject variation
+}}
+\end{center}
 
-```
-Total variation = Between-subject variation + Within-subject variation
-```
+| Component | What it represents |
+|:----------|:------------------|
+| **Between-subject** | Alice vs Bob differences (personal baselines) |
+| **Within-subject** | Day-to-day changes for the same person |
 
 ### The Intuitive Model
 
-```
-EMG_value = Overall_average + Day_effect + Subject's_personal_baseline + Random_noise
-```
+\begin{center}
+\fcolorbox{primaryblue}{infobg}{\parbox{0.85\textwidth}{
+\centering
+\vspace{0.3em}
+\texttt{EMG\_value = Overall\_average + Day\_effect + Subject's\_baseline + Noise}
+\vspace{0.3em}
+}}
+\end{center}
 
 | Component | What it represents |
-|-----------|-------------------|
+|:----------|:------------------|
 | **Overall_average** | The typical EMG value across everyone |
-| **Day_effect** | How much Day 2, 3, 4, etc. differ from Day 1 (this is what we want to test!) |
-| **Subject's_personal_baseline** | Alice is naturally 3 units lower, Bob is 5 units higher, etc. |
+| **Day_effect** | How much Day 2, 3, 4, etc. differ from Day 1 $\leftarrow$ *this is what we test!* |
+| **Subject's_baseline** | Alice is naturally 3 units lower, Bob is 5 units higher, etc. |
 | **Random_noise** | Unexplained day-to-day fluctuations |
-
-By explicitly modeling the "personal baseline," we correctly account for the fact that 
-measurements from the same person are related.
 
 ### The Statistical Formula
 
-For a continuous outcome Y for subject i on day j:
+For a continuous outcome Y for subject *i* on day *j*:
 
-```
-Y_ij = β₀ + β_day(j) + u_i + ε_ij
+$$Y_{ij} = \beta_0 + \beta_{\text{day}(j)} + u_i + \varepsilon_{ij}$$
 
 Where:
-  β₀           = grand mean (intercept)
-  β_day(j)     = effect of day (Day2 vs Day1, Day3 vs Day1, ...)
-  u_i ~ N(0, σ²_u)  = subject-specific random intercept
-  ε_ij ~ N(0, σ²)   = residual error
-```
 
-**Variance structure:**
-- Var(u_i) = σ²_u (between-subject variance)
-- Var(ε_ij) = σ² (within-subject/residual variance)
-- Cov(Y_ij, Y_ik) = σ²_u for observations from the same subject (this is the key!)
+- $\beta_0$ = grand mean (intercept)
+- $\beta_{\text{day}(j)}$ = effect of day (Day2 vs Day1, Day3 vs Day1, ...)
+- $u_i \sim N(0, \sigma^2_u)$ = subject-specific random intercept
+- $\varepsilon_{ij} \sim N(0, \sigma^2)$ = residual error
 
 ### The ICC: Measuring Clustering
 
-The **Intraclass Correlation (ICC)** tells you what proportion of total variation is due to 
-between-subject differences:
+The **Intraclass Correlation (ICC)** tells you what proportion of total variation is due to between-subject differences:
 
-```
-ICC = σ²_u / (σ²_u + σ²)
-
-    = Between-subject variance / Total variance
-```
+$$\text{ICC} = \frac{\sigma^2_u}{\sigma^2_u + \sigma^2} = \frac{\text{Between-subject variance}}{\text{Total variance}}$$
 
 **How to interpret ICC:**
 
 | ICC Value | Meaning | Implication |
-|-----------|---------|-------------|
-| 0.0 - 0.2 | Low clustering | Subjects are similar; most variation is day-to-day |
-| 0.2 - 0.5 | Moderate clustering | Both sources of variation matter |
-| 0.5 - 0.8 | Strong clustering | Who you are matters a lot |
-| 0.8 - 1.0 | Very strong clustering | Almost all variation is between people |
+|:----------|:--------|:------------|
+| 0.0 -- 0.2 | Low clustering | Subjects are similar; most variation is day-to-day |
+| 0.2 -- 0.5 | Moderate | Both sources of variation matter |
+| 0.5 -- 0.8 | Strong | Who you are matters a lot |
+| 0.8 -- 1.0 | Very strong | Almost all variation is between people |
 
-**In our EMG data, ICC is typically 0.4-0.6**, meaning about half the variation is 
-"Alice vs Bob" and half is "day-to-day changes."
-
-> **If ICC is high, you REALLY need mixed models.** Using t-tests would give wrong answers.
+\begin{tcolorbox}[colback=dangerbg, colframe=dangerred, title={\faIcon{exclamation-circle} Important}, fonttitle=\bfseries]
+In our EMG data, ICC is typically \textbf{0.4--0.6}. If ICC is high, you REALLY need mixed models. Using t-tests would give wrong answers.
+\end{tcolorbox}
 
 ---
 
@@ -204,10 +191,10 @@ ICC = σ²_u / (σ²_u + σ²)
 
 ### What a P-Value Actually Means
 
-The **p-value** answers: "If there were NO real effect, how often would we see data this extreme?"
+The **p-value** answers: *"If there were NO real effect, how often would we see data this extreme?"*
 
 | p-value | Interpretation |
-|---------|----------------|
+|:--------|:---------------|
 | p < 0.01 | Strong evidence of a real effect |
 | p < 0.05 | Moderate evidence (conventional threshold) |
 | p < 0.10 | Weak evidence, worth noting but not conclusive |
@@ -215,24 +202,25 @@ The **p-value** answers: "If there were NO real effect, how often would we see d
 
 ### Common Misinterpretations
 
-> **IMPORTANT**: p < 0.05 does NOT mean "95% sure the effect is real."
+\begin{tcolorbox}[colback=dangerbg, colframe=dangerred, title={\faIcon{times-circle} Common Mistakes}, fonttitle=\bfseries]
+p < 0.05 does \textbf{NOT} mean "95\% sure the effect is real."
+\end{tcolorbox}
 
-| What people think | What it actually means |
-|-------------------|------------------------|
-| "95% chance the effect is real" | WRONG |
-| "5% chance this is a false positive" | WRONG (that's a different concept) |
-| "If there's no effect, we'd see data this extreme only 5% of the time" | CORRECT |
+| What people think | Reality |
+|:------------------|:--------|
+| "95% chance the effect is real" | **WRONG** |
+| "5% chance this is a false positive" | **WRONG** |
+| "If there's no effect, we'd see this data only 5% of the time" | **CORRECT** |
 
 ### Statistical vs. Practical Significance
 
-A **statistically significant** result (p < 0.05) tells you the effect is probably real.  
+A **statistically significant** result (p < 0.05) tells you the effect is probably real.
 It does NOT tell you the effect is **large enough to matter**.
 
-Example:
-- "Day 4 is 0.2 %MVC lower than Day 1" might be significant (p = 0.04) with large samples
-- But is 0.2 %MVC clinically meaningful? That's a separate question!
-
-**Always report effect sizes alongside p-values.**
+\begin{tcolorbox}[colback=infobg, colframe=infoblue, title={\faIcon{info-circle} Example}, fonttitle=\bfseries]
+"Day 4 is 0.2 \%MVC lower than Day 1" might be significant (p = 0.04) with large samples. But is 0.2 \%MVC clinically meaningful? That's a separate question!\\[0.5em]
+\textbf{Always report effect sizes alongside p-values.}
+\end{tcolorbox}
 
 ---
 
@@ -241,38 +229,30 @@ Example:
 ### Raw Units vs. Standardized
 
 | Approach | Example | When to use |
-|----------|---------|-------------|
+|:---------|:--------|:------------|
 | **Raw units** | "Day 4 is 1.93 %MVC lower" | Primary reporting; clinically interpretable |
 | **Cohen's d** | "d = 0.28 (small effect)" | Cross-study comparison; standardized |
 
 ### Cohen's d for Mixed Models
 
-In LMMs, variance is decomposed into components, so there's no single "pooled SD."  
-We use **residual-standardized effect size**:
+In LMMs, variance is decomposed into components, so there's no single "pooled SD." We use **residual-standardized effect size**:
 
-```
-d = Δ / σ_residual
+$$d = \frac{\Delta}{\sigma_{\text{residual}}}$$
 
-Where:
-  Δ = contrast estimate (e.g., Day1 - Day4 difference)
-  σ_residual = square root of residual variance from LMM
-```
-
-This standardizes by **within-subject variability**, which is appropriate for 
-repeated-measures designs.
+Where $\Delta$ = contrast estimate and $\sigma_{\text{residual}}$ = square root of residual variance.
 
 ### Cohen's d Interpretation
 
 | |d| | Interpretation |
-|-----|----------------|
+|:----|:---------------|
 | < 0.2 | Negligible |
-| 0.2 - 0.5 | Small |
-| 0.5 - 0.8 | Medium |
-| ≥ 0.8 | Large |
+| 0.2 -- 0.5 | Small |
+| 0.5 -- 0.8 | Medium |
+| $\geq$ 0.8 | Large |
 
-> **Recommendation**: Always report raw-unit effects with confidence intervals as the
-> primary result. Cohen's d is supplementary for readers who want standardized comparisons
-> across studies.
+\begin{tcolorbox}[colback=tipbg, colframe=tipgreen, title={\faIcon{lightbulb} Recommendation}, fonttitle=\bfseries]
+Always report raw-unit effects with confidence intervals as the primary result. Cohen's d is supplementary for readers who want standardized comparisons across studies.
+\end{tcolorbox}
 
 ---
 
@@ -280,19 +260,17 @@ repeated-measures designs.
 
 ### The Problem
 
-You're analyzing 20 different EMG outcomes. Even if NONE of them have real effects, 
-you'll probably find at least one "significant" result just by chance!
+You're analyzing 20 different EMG outcomes. Even if NONE of them have real effects, you'll probably find at least one "significant" result just by chance!
 
 **Why?** If p < 0.05 means "5% chance when there's no effect," then:
+
 - Test 1 outcome: 5% chance of false positive
-- Test 20 outcomes: 1 - (0.95)^20 ≈ 64% chance of AT LEAST ONE false positive!
+- Test 20 outcomes: 1 - (0.95)^20^ $\approx$ **64% chance** of AT LEAST ONE false positive!
 
 ### The Solution: Correction Methods
 
-We adjust our p-values to account for testing multiple outcomes:
-
 | Method | Controls | When to use |
-|--------|----------|-------------|
+|:-------|:---------|:------------|
 | **FDR** (False Discovery Rate) | Expected proportion of false discoveries | Exploratory analysis, many outcomes |
 | **FWER** (Family-Wise Error Rate) | Chance of ANY false positive | Confirmatory, few primary outcomes |
 
@@ -300,51 +278,31 @@ We adjust our p-values to account for testing multiple outcomes:
 
 Our pipeline uses a **two-layer correction**:
 
-```
-Layer 1 (across outcomes): FDR on LRT p-values
-   "Which outcomes show any day effect?"
-   - EMG_intensity.mean_percent_mvc: p_adj = 0.005 [PASS]
-   - EMG_apdf.active.p50: p_adj = 0.04 [PASS]
-   - EMG_apdf.rest.p10: p_adj = 0.12 [FAIL]
-        |
-        v
-Layer 2 (within outcome): Holm on post-hoc contrasts  
-   "Which specific days differ?" (only for outcomes that passed Layer 1)
-   - Day1-Day2: p_adj = 0.50
-   - Day1-Day4: p_adj = 0.04 [PASS]
-   - Day1-Day5: p_adj = 0.18
-```
+\begin{tcolorbox}[colback=lightgray, colframe=darkgray, fonttitle=\bfseries, title=Two-Layer Correction Strategy]
+\textbf{Layer 1} (across outcomes): FDR on LRT p-values\\
+\quad "Which outcomes show any day effect?"\\[0.3em]
+\quad \textcolor{accentgreen}{\faIcon{check}} EMG\_intensity.mean\_percent\_mvc: p\_adj = 0.005\\
+\quad \textcolor{accentgreen}{\faIcon{check}} EMG\_apdf.active.p50: p\_adj = 0.04\\
+\quad \textcolor{dangerred}{\faIcon{times}} EMG\_apdf.rest.p10: p\_adj = 0.12\\[0.5em]
+\textbf{Layer 2} (within outcome): Holm on post-hoc contrasts\\
+\quad "Which specific days differ?" (only for outcomes that passed Layer 1)
+\end{tcolorbox}
 
 ### Critical: Which P-Value Feeds FDR?
 
-When you see the coefficients table:
-
-```
-             term   estimate  p_value
-C(day_index)[T.2]     -0.411    0.618   <-- NOT this p-value!
-C(day_index)[T.3]     -0.028    0.973
-C(day_index)[T.4]     -1.931    0.022
-C(day_index)[T.5]     -1.643    0.092
-```
-
-**We do NOT use these individual coefficient p-values for FDR correction.**
-
-Instead, we use the **omnibus Likelihood Ratio Test (LRT)** p-value. This tests:
-
-> "Does including 'day' improve the model AT ALL?"
+\begin{tcolorbox}[colback=dangerbg, colframe=dangerred, title={\faIcon{exclamation-circle} Critical Distinction}, fonttitle=\bfseries]
+When you see the coefficients table with individual p-values for Day 2, Day 3, etc., we do \textbf{NOT} use these for FDR correction.\\[0.5em]
+Instead, we use the \textbf{omnibus Likelihood Ratio Test (LRT)} p-value, which asks: "Does including 'day' improve the model AT ALL?"
+\end{tcolorbox}
 
 ```python
-# The LRT compares two models:
-# Full model:    EMG ~ day + side + (1|subject)
-# Reduced model: EMG ~ side + (1|subject)
-
-# Access it from the result:
-print(result['fit_stats']['lrt_pvalue'])  # This feeds FDR!
+# Access the LRT p-value (this feeds FDR!)
+print(result['fit_stats']['lrt_pvalue'])
 ```
 
 **Why the LRT, not coefficient p-values?**
 
-- Coefficient p-values test "Day 2 vs Day 1", "Day 3 vs Day 1", etc. - that's many tests per outcome!
+- Coefficient p-values test "Day 2 vs Day 1", "Day 3 vs Day 1", etc. -- many tests per outcome!
 - LRT asks ONE question per outcome: "Is there ANY day effect?"
 - FDR needs ONE p-value per outcome to work correctly
 
@@ -354,22 +312,22 @@ print(result['fit_stats']['lrt_pvalue'])  # This feeds FDR!
 
 ### The Main Assumptions
 
-LMMs assume:
-
 | Assumption | What it means | How to check |
-|------------|---------------|--------------|
-| **Residuals ~ Normal** | "Leftovers" should be bell-shaped | QQ plot, Shapiro-Wilk test |
-| **Constant variance** | Spread of residuals doesn't change with fitted values | Residuals vs. Fitted plot |
-| **Independence within clusters** | After accounting for subjects, remaining variation is random | Study design |
+|:-----------|:--------------|:-------------|
+| **Residuals ~ Normal** | "Leftovers" should be bell-shaped | QQ plot, Shapiro-Wilk |
+| **Constant variance** | Spread doesn't change with fitted values | Residuals vs. Fitted plot |
+| **Independence within clusters** | After accounting for subjects, variation is random | Study design |
 
 ### Don't Panic About Violations!
 
-> **LMMs are fairly robust to mild assumption violations.**
+\begin{tcolorbox}[colback=tipbg, colframe=tipgreen, title={\faIcon{lightbulb} Good News}, fonttitle=\bfseries]
+LMMs are fairly robust to mild assumption violations.
+\end{tcolorbox}
 
 | Situation | What to do |
-|-----------|------------|
+|:----------|:-----------|
 | Shapiro-Wilk p < 0.05 but QQ plot looks OK | Probably fine, especially with N > 30 |
-| Moderate skewness (|skew| < 1) | Usually OK; consider transform if severe |
+| Moderate skewness (\|skew\| < 1) | Usually OK; consider transform if severe |
 | A few outliers | Investigate them; run sensitivity analysis |
 
 ### Visual Diagnostics (Most Important!)
@@ -395,15 +353,15 @@ plt.tight_layout()
 plt.show()
 ```
 
-**What good plots look like:**
-- **QQ Plot**: Points follow the diagonal line (some wobble at edges is OK)
-- **Residuals vs Fitted**: Random scatter around zero, no funnel shape or curves
-
 ---
+
+\newpage
 
 # PART II: The Analysis Workflow
 
-*Step-by-step guide to running your analysis*
+\begin{center}
+\textit{Step-by-step guide to running your analysis}
+\end{center}
 
 ---
 
@@ -461,18 +419,16 @@ print(quests['single_instance'].keys())
 
 ### The AnalysisDataset Container
 
-All analysis functions expect an **AnalysisDataset** - a standardized container:
-
-```python
-# What's inside ds:
-ds['data']          # The actual data (pandas DataFrame, long format)
-ds['outcome_vars']  # List of outcome column names
-ds['id_var']        # Clustering variable (usually 'subject_id')
-ds['time_var']      # Time variable (usually 'day_index')
-ds['grouping_vars'] # Additional grouping (e.g., ["side"])
-ds['sensor']        # Which sensor ('emg', 'heart_rate', etc.)
-ds['level']         # Aggregation level ('daily', 'hourly')
-```
+\begin{tcolorbox}[colback=infobg, colframe=infoblue, title={\faIcon{database} AnalysisDataset Structure}, fonttitle=\bfseries]
+All analysis functions expect an \textbf{AnalysisDataset} -- a standardized container:
+\begin{itemize}[noitemsep]
+\item \texttt{ds['data']} -- The actual DataFrame (long format)
+\item \texttt{ds['outcome\_vars']} -- List of outcome column names
+\item \texttt{ds['id\_var']} -- Clustering variable (usually 'subject\_id')
+\item \texttt{ds['time\_var']} -- Time variable (usually 'day\_index')
+\item \texttt{ds['grouping\_vars']} -- Additional grouping (e.g., ["side"])
+\end{itemize}
+\end{tcolorbox}
 
 ### Prepare EMG Data (Most Common)
 
@@ -482,16 +438,16 @@ from oh_stats import prepare_daily_emg
 # Keep both sides as separate rows
 ds = prepare_daily_emg(profiles, side="both")
 
-# Or average left/right (simpler)
+# Or average left/right (simpler - RECOMMENDED)
 ds = prepare_daily_emg(profiles, side="average")
 ```
 
 **Side handling options:**
 
 | Strategy | Effect | When to Use |
-|----------|--------|-------------|
+|:---------|:-------|:------------|
 | `"both"` | Left and right as separate rows | When laterality is of interest |
-| `"average"` | Mean of left/right | When laterality is nuisance (recommended default) |
+| `"average"` | Mean of left/right | When laterality is nuisance (**recommended**) |
 | `"left"` / `"right"` | Keep only one side | When sides have different meaning |
 
 ### Prepare Any Sensor (Generic)
@@ -537,7 +493,11 @@ workload_ds = prepare_daily_workload(profiles)
 
 ---
 
-## 10. Step 3: Check Data Quality (ALWAYS DO THIS!)
+## 10. Step 3: Check Data Quality
+
+\begin{tcolorbox}[colback=dangerbg, colframe=dangerred, title={\faIcon{exclamation-circle} ALWAYS DO THIS!}, fonttitle=\bfseries]
+Never skip data quality checks before modeling.
+\end{tcolorbox}
 
 ### The Non-Negotiable Pre-Modeling Checks
 
@@ -564,10 +524,10 @@ if degenerate:
 ### What to Look For
 
 | Check | Threshold | Action |
-|-------|-----------|--------|
+|:------|:----------|:-------|
 | Missing data | > 10% | Investigate pattern; is it random or systematic? |
 | Degenerate | mode > 95% of values | Exclude from modeling |
-| Extreme skewness | |skew| > 2 | Consider LOG transform |
+| Extreme skewness | \|skew\| > 2 | Consider LOG transform |
 | Sample size | < 20 subjects | Results may be unstable |
 
 ---
@@ -648,7 +608,9 @@ EMG_apdf.active.p50                  0.0712      0.0712        False
 
 ## 13. Step 6: Post-Hoc Contrasts
 
-**Only run post-hocs for outcomes that passed FDR correction!**
+\begin{tcolorbox}[colback=warningbg, colframe=warningyellow, title={\faIcon{exclamation-triangle} Important}, fonttitle=\bfseries]
+Only run post-hocs for outcomes that passed FDR correction!
+\end{tcolorbox}
 
 ```python
 from oh_stats import pairwise_contrasts
@@ -683,6 +645,8 @@ print(f"Assumptions broadly met: {diag['assumptions_met']}")
 
 ---
 
+\newpage
+
 # PART III: Interpreting and Reporting Results
 
 ---
@@ -704,7 +668,7 @@ C(day_index)[T.5]    -1.643      0.975    -1.685     0.092    -3.554     0.268
 **How to read this:**
 
 | Column | What it means |
-|--------|---------------|
+|:-------|:--------------|
 | term | What's being compared |
 | estimate | The size of the difference (in raw units) |
 | std_error | How uncertain we are (smaller = more confident) |
@@ -715,10 +679,10 @@ C(day_index)[T.5]    -1.643      0.975    -1.685     0.092    -3.554     0.268
 **Interpreting each row:**
 
 | Row | Interpretation |
-|-----|----------------|
+|:----|:---------------|
 | Intercept (9.406) | Mean %MVC on Day 1, Left side |
 | C(day_index)[T.2] = -0.411 | Day 2 is 0.41 units LOWER than Day 1 (not significant) |
-| C(day_index)[T.4] = -1.931 | Day 4 is 1.93 units LOWER than Day 1 (p=0.02, significant!) |
+| C(day_index)[T.4] = -1.931 | Day 4 is 1.93 units LOWER than Day 1 (p=0.02, **significant!**) |
 | C(side)[T.right] = 0.902 | Right side is 0.90 units HIGHER than left (not significant) |
 
 ### Random Effects
@@ -729,13 +693,14 @@ print(result['random_effects'])
 ```
 
 | Component | Value | Meaning |
-|-----------|-------|---------|
-| group_var | 24.05 | Between-subject variance (σ²_u) |
-| residual_var | 23.88 | Within-subject variance (σ²) |
+|:----------|:------|:--------|
+| group_var | 24.05 | Between-subject variance ($\sigma^2_u$) |
+| residual_var | 23.88 | Within-subject variance ($\sigma^2$) |
 | icc | 0.502 | 50% of variation is between subjects |
 
-**ICC of 0.50 tells us**: Mixed models were definitely the right choice! 
-Half of all variation is just "who the person is."
+\begin{tcolorbox}[colback=tipbg, colframe=tipgreen, title={\faIcon{check-circle} Validation}, fonttitle=\bfseries]
+ICC of 0.50 tells us: Mixed models were definitely the right choice! Half of all variation is just "who the person is."
+\end{tcolorbox}
 
 ### Fit Statistics
 
@@ -746,10 +711,10 @@ print(result['fit_stats'])
 ```
 
 | Statistic | Use |
-|-----------|-----|
+|:----------|:----|
 | AIC/BIC | Compare models (lower = better) |
 | loglik | Log-likelihood (for advanced comparisons) |
-| lrt_pvalue | **The p-value used for FDR correction** |
+| **lrt_pvalue** | **The p-value used for FDR correction** |
 
 ---
 
@@ -757,43 +722,33 @@ print(result['fit_stats'])
 
 ### Methods Section
 
-> Daily EMG metrics were analyzed using linear mixed models with day as a fixed 
-> effect (categorical) and random intercepts for subjects to account for repeated 
-> measurements within individuals. Side (left/right) was included as a fixed 
-> effect. Models were fitted using maximum likelihood estimation via statsmodels 
-> (Python). Given the exploratory nature of the analysis across N=10 EMG outcomes, 
-> p-values were adjusted using the Benjamini-Hochberg procedure to control the 
-> false discovery rate at 5%. Post-hoc pairwise comparisons between days were 
-> corrected using the Holm method. Effect sizes were calculated as Cohen's d using 
-> the residual standard deviation as the denominator.
+\begin{tcolorbox}[colback=lightgray, colframe=darkgray, title={\faIcon{file-alt} Example Methods Text}, fonttitle=\bfseries]
+Daily EMG metrics were analyzed using linear mixed models with day as a fixed effect (categorical) and random intercepts for subjects to account for repeated measurements within individuals. Side (left/right) was included as a fixed effect. Models were fitted using maximum likelihood estimation via statsmodels (Python). Given the exploratory nature of the analysis across N=10 EMG outcomes, p-values were adjusted using the Benjamini-Hochberg procedure to control the false discovery rate at 5\%. Post-hoc pairwise comparisons between days were corrected using the Holm method. Effect sizes were calculated as Cohen's d using the residual standard deviation as the denominator.
+\end{tcolorbox}
 
 ### Results Section
 
-> We analyzed 320 observations from 37 subjects over 5 monitoring days (mean 4.3 
-> days per subject, range 3-5). The intraclass correlation was 0.50 (95% CI: 
-> 0.35-0.65), indicating that 50% of the variance in EMG intensity was attributable 
-> to between-subject differences, justifying the use of mixed models.
->
-> After FDR correction, 4 of 10 EMG outcomes showed significant day effects (all 
-> p_adj < 0.05). For mean %MVC specifically, the overall day effect was significant 
-> (LRT χ²(4) = 12.5, p = 0.014). Post-hoc comparisons (Holm-adjusted) revealed 
-> that Day 4 was significantly lower than Day 1 (Δ = -1.93 %MVC, 95% CI: -3.58 
-> to -0.28, Cohen's d = 0.28, p_adj = 0.043), representing a small effect.
+\begin{tcolorbox}[colback=lightgray, colframe=darkgray, title={\faIcon{file-alt} Example Results Text}, fonttitle=\bfseries]
+We analyzed 320 observations from 37 subjects over 5 monitoring days (mean 4.3 days per subject, range 3--5). The intraclass correlation was 0.50 (95\% CI: 0.35--0.65), indicating that 50\% of the variance in EMG intensity was attributable to between-subject differences, justifying the use of mixed models.\\[0.5em]
+After FDR correction, 4 of 10 EMG outcomes showed significant day effects (all p\_adj < 0.05). For mean \%MVC specifically, the overall day effect was significant (LRT $\chi^2$(4) = 12.5, p = 0.014). Post-hoc comparisons (Holm-adjusted) revealed that Day 4 was significantly lower than Day 1 ($\Delta$ = -1.93 \%MVC, 95\% CI: -3.58 to -0.28, Cohen's d = 0.28, p\_adj = 0.043), representing a small effect.
+\end{tcolorbox}
 
 ### What to Report (Checklist)
 
 | Element | Example | Where |
-|---------|---------|-------|
+|:--------|:--------|:------|
 | Sample size | "37 subjects, 320 observations" | Methods/Results |
 | ICC | "ICC = 0.50" | Results |
 | FDR method | "Benjamini-Hochberg" | Methods |
-| Omnibus test | "LRT χ²(4) = 12.5, p = 0.014" | Results |
-| Effect estimate | "Δ = -1.93 %MVC" | Results |
+| Omnibus test | "LRT $\chi^2$(4) = 12.5, p = 0.014" | Results |
+| Effect estimate | "$\Delta$ = -1.93 %MVC" | Results |
 | 95% CI | "95% CI: -3.58 to -0.28" | Results |
 | Effect size | "Cohen's d = 0.28" | Results |
 | Adjusted p-value | "p_adj = 0.043" | Results |
 
 ---
+
+\newpage
 
 # PART IV: Edge Cases & Troubleshooting
 
@@ -805,10 +760,12 @@ print(result['fit_stats'])
 
 **The situation:** Some subjects have 5 days of data, others have only 3.
 
-**Good news:** LMMs handle this naturally! They use all available data and don't require 
-balanced designs.
+\begin{tcolorbox}[colback=tipbg, colframe=tipgreen, title={\faIcon{check-circle} Good News}, fonttitle=\bfseries]
+LMMs handle this naturally! They use all available data and don't require balanced designs.
+\end{tcolorbox}
 
 **What to watch for:**
+
 - Is missingness random or systematic? (e.g., do subjects drop out because they're injured?)
 - Very few observations per subject (< 3) may cause convergence issues
 
@@ -836,7 +793,9 @@ print(f"Exclude: {list(degenerate['outcome'])}")
 
 **The situation:** `result['converged'] = False`
 
-**What it means:** The optimizer couldn't find a stable solution. Results are unreliable.
+\begin{tcolorbox}[colback=dangerbg, colframe=dangerred, title={\faIcon{exclamation-circle} Warning}, fonttitle=\bfseries]
+The optimizer couldn't find a stable solution. Results are unreliable.
+\end{tcolorbox}
 
 **What to try:**
 
@@ -855,20 +814,21 @@ if not result['converged']:
 
 ### 17.4 EMG Left/Right Correlation (side="both")
 
-**The situation:** You kept both sides as separate rows, but left and right from the 
-same subject-day are correlated.
+**The situation:** You kept both sides as separate rows, but left and right from the same subject-day are correlated.
 
 **The problem:** A subject-only random intercept doesn't fully capture same-day correlations.
 
 **Three defensible strategies:**
 
 | Strategy | Pros | Cons |
-|----------|------|------|
+|:---------|:-----|:-----|
 | `side="average"` | Simplest, no correlation issue | Loses side-specific information |
 | Analyze sides separately | Clean interpretation | Doubles the number of tests |
 | Keep `side="both"` | More power | Slight model misspecification |
 
-**Recommendation:** Start with `side="average"` for simplicity.
+\begin{tcolorbox}[colback=tipbg, colframe=tipgreen, title={\faIcon{lightbulb} Recommendation}, fonttitle=\bfseries]
+Start with \texttt{side="average"} for simplicity.
+\end{tcolorbox}
 
 ### 17.5 Skewed Distributions
 
@@ -877,6 +837,7 @@ same subject-day are correlated.
 **Don't panic!** LMMs are fairly robust to moderate non-normality, especially with larger samples.
 
 **When to act:**
+
 - Severe skewness (> 2) with small samples
 - Heavy ceiling/floor effects
 
@@ -919,13 +880,12 @@ print(ds['data'][outlier_idx])
 
 **The situation:** You have questionnaire items on a 1-5 or 0-10 scale.
 
-**The theoretical issue:** Likert scales are ordinal, not continuous. The difference between 
-1->2 isn't necessarily the same as 4->5.
+**The theoretical issue:** Likert scales are ordinal, not continuous. The difference between 1$\rightarrow$2 isn't necessarily the same as 4$\rightarrow$5.
 
 **Practical guidance:**
 
 | Distribution | Recommendation |
-|--------------|----------------|
+|:-------------|:---------------|
 | Roughly symmetric, no ceiling/floor | Treat as continuous with LMM (common practice) |
 | Heavy ceiling (most responses = max) | Consider ordinal models or dichotomize |
 | Heavy floor (most responses = min) | Consider ordinal models or dichotomize |
@@ -961,6 +921,7 @@ if result['n_groups'] < 30:
 ```
 
 **Recommendations:**
+
 - Prefer simpler models (fewer fixed effects)
 - Consider reporting alongside bootstrap CIs
 - Be cautious about random effect variance interpretations
@@ -969,24 +930,24 @@ if result['n_groups'] < 30:
 
 ## 18. Quick Troubleshooting Checklist
 
-```
-[ ] Model didn't converge?
-    -> Try side="average", check for degenerate outcomes, simplify model
-
-[ ] Residuals look weird?
-    -> Check for outliers, consider transformation
-
-[ ] Unexpected results?
-    -> Check missingness patterns, verify data quality
-
-[ ] p-values all non-significant but you expected effects?
-    -> Check ICC (high ICC = less power), check sample size
-
-[ ] Too many significant results?
-    -> Are you using FDR correction? Check for data leakage
-```
+\begin{tcolorbox}[colback=lightgray, colframe=darkgray, title={\faIcon{clipboard-check} Troubleshooting Checklist}, fonttitle=\bfseries]
+\begin{itemize}[leftmargin=*]
+\item[$\square$] \textbf{Model didn't converge?}\\
+$\rightarrow$ Try side="average", check for degenerate outcomes, simplify model
+\item[$\square$] \textbf{Residuals look weird?}\\
+$\rightarrow$ Check for outliers, consider transformation
+\item[$\square$] \textbf{Unexpected results?}\\
+$\rightarrow$ Check missingness patterns, verify data quality
+\item[$\square$] \textbf{p-values all non-significant but you expected effects?}\\
+$\rightarrow$ Check ICC (high ICC = less power), check sample size
+\item[$\square$] \textbf{Too many significant results?}\\
+$\rightarrow$ Are you using FDR correction? Check for data leakage
+\end{itemize}
+\end{tcolorbox}
 
 ---
+
+\newpage
 
 # PART V: Reference
 
@@ -997,7 +958,7 @@ if result['n_groups'] < 30:
 ### When to Use Each Transform
 
 | Outcome Type | Transform | When to Use |
-|--------------|-----------|-------------|
+|:-------------|:----------|:------------|
 | **Continuous** (unbounded) | NONE | Default for %MVC, BPM, etc. |
 | **Right-skewed** continuous | LOG or LOG1P | When distribution has long right tail |
 | **Proportions** (0-1) | LOGIT | % time, rest_percent, OSPAQ |
@@ -1007,7 +968,7 @@ if result['n_groups'] < 30:
 ### Pre-Registered Outcomes
 
 | Outcome | Type | Transform |
-|---------|------|-----------|
+|:--------|:-----|:----------|
 | EMG_intensity.mean_percent_mvc | CONTINUOUS | NONE |
 | EMG_intensity.iemg_percent_seconds | CONTINUOUS | LOG |
 | EMG_apdf.rest_percent | PROPORTION | LOGIT |
@@ -1024,7 +985,7 @@ if result['n_groups'] < 30:
 ## 20. Glossary
 
 | Term | Definition |
-|------|------------|
+|:-----|:-----------|
 | **AIC** | Akaike Information Criterion. Lower = better model fit. |
 | **AnalysisDataset** | Standardized container for analysis-ready data. |
 | **Coefficient** | Estimated size of an effect (e.g., Day 4 is -1.93 lower than Day 1). |
@@ -1082,28 +1043,40 @@ print(fdr[fdr['significant']])
 
 ### Decision Tree
 
-```
-START: Do you have repeated measures per subject?
-  |
-  +-- NO --> Use regular t-test or ANOVA
-  |
-  +-- YES --> Use Linear Mixed Model
-              |
-              How many outcomes are you testing?
-              |
-              +-- ONE --> Report p-value directly
-              |
-              +-- MULTIPLE --> Apply FDR correction
-                              |
-                              Any significant after FDR?
-                              |
-                              +-- YES --> Run post-hoc with Holm
-                              |
-                              +-- NO --> Report null findings
-```
+\begin{center}
+\begin{tikzpicture}[
+    node distance=1.5cm,
+    decision/.style={diamond, draw, fill=infobg, text width=3cm, align=center, inner sep=2pt},
+    block/.style={rectangle, draw, fill=tipbg, rounded corners, text width=3cm, align=center, minimum height=1cm},
+    arrow/.style={->, thick, >=stealth}
+]
+\node[decision] (start) {Repeated measures per subject?};
+\node[block, below left=1.5cm and 1cm of start] (ttest) {Use t-test or ANOVA};
+\node[block, below right=1.5cm and 1cm of start] (lmm) {Use Linear Mixed Model};
+\node[decision, below=1.5cm of lmm] (howmany) {How many outcomes?};
+\node[block, below left=1.5cm and 0.5cm of howmany] (one) {Report p-value directly};
+\node[block, below right=1.5cm and 0.5cm of howmany] (multi) {Apply FDR correction};
+\node[decision, below=1.5cm of multi] (sig) {Any significant after FDR?};
+\node[block, below left=1.5cm and 0.5cm of sig] (null) {Report null findings};
+\node[block, below right=1.5cm and 0.5cm of sig] (posthoc) {Run post-hoc with Holm};
+
+\draw[arrow] (start) -- node[left] {NO} (ttest);
+\draw[arrow] (start) -- node[right] {YES} (lmm);
+\draw[arrow] (lmm) -- (howmany);
+\draw[arrow] (howmany) -- node[left] {ONE} (one);
+\draw[arrow] (howmany) -- node[right] {MULTIPLE} (multi);
+\draw[arrow] (multi) -- (sig);
+\draw[arrow] (sig) -- node[left] {NO} (null);
+\draw[arrow] (sig) -- node[right] {YES} (posthoc);
+\end{tikzpicture}
+\end{center}
 
 ---
 
-*OH Stats Complete Guide v1.0*  
-*January 2026*  
-*For oh_stats package v0.3.0*
+\vspace{2em}
+\begin{center}
+\rule{0.6\textwidth}{0.4pt}\\[1em]
+\textbf{OH Stats Complete Guide v1.0}\\[0.3em]
+\textit{January 2026}\\[0.3em]
+For oh\_stats package v0.3.0
+\end{center}

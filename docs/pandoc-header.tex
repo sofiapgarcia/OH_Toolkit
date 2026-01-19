@@ -1,13 +1,58 @@
-% Code block styling with frames
+% ============================================================
+% OH Stats Guide - Professional PDF Styling
+% ============================================================
+
 \usepackage{framed}
 \usepackage{xcolor}
 \usepackage{mdframed}
+\usepackage{fontawesome5}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric,arrows,positioning}
+\usepackage{tcolorbox}
+\tcbuselibrary{skins,breakable}
+\usepackage{enumitem}
+\usepackage{booktabs}
+\usepackage{colortbl}
+\usepackage{array}
+\usepackage{longtable}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
 
-% Define colors
+% ============================================================
+% COLOR PALETTE
+% ============================================================
 \definecolor{codebg}{RGB}{248,248,248}
 \definecolor{codeframe}{RGB}{200,200,200}
+\definecolor{primaryblue}{RGB}{0,102,204}
+\definecolor{accentgreen}{RGB}{40,167,69}
+\definecolor{warningyellow}{RGB}{255,193,7}
+\definecolor{warningbg}{RGB}{255,250,230}
+\definecolor{dangerred}{RGB}{220,53,69}
+\definecolor{dangerbg}{RGB}{255,235,238}
+\definecolor{infoblue}{RGB}{23,162,184}
+\definecolor{infobg}{RGB}{232,244,248}
+\definecolor{tipgreen}{RGB}{40,167,69}
+\definecolor{tipbg}{RGB}{232,248,232}
+\definecolor{lightgray}{RGB}{245,245,245}
+\definecolor{darkgray}{RGB}{80,80,80}
+\definecolor{headergray}{RGB}{60,60,60}
 
-% Style for code blocks (Shaded environment used by pandoc)
+% ============================================================
+% SECTION STYLING
+% ============================================================
+\titleformat{\section}
+  {\normalfont\Large\bfseries\color{primaryblue}}
+  {\thesection}{1em}{}
+\titleformat{\subsection}
+  {\normalfont\large\bfseries\color{darkgray}}
+  {\thesubsection}{1em}{}
+\titleformat{\subsubsection}
+  {\normalfont\normalsize\bfseries\color{darkgray}}
+  {\thesubsubsection}{1em}{}
+
+% ============================================================
+% CODE BLOCK STYLING
+% ============================================================
 \renewenvironment{Shaded}{
   \begin{mdframed}[
     backgroundcolor=codebg,
@@ -19,12 +64,135 @@
     rightline=true,
     innerleftmargin=10pt,
     innerrightmargin=10pt,
-    innertopmargin=10pt,
-    innerbottommargin=10pt,
+    innertopmargin=8pt,
+    innerbottommargin=8pt,
     skipabove=10pt,
-    skipbelow=10pt
+    skipbelow=10pt,
+    roundcorner=3pt
   ]
 }{\end{mdframed}}
 
-% Reduce code font size slightly
+% Reduce code font size
 \AtBeginEnvironment{Highlighting}{\small}
+
+% ============================================================
+% CALLOUT BOXES
+% ============================================================
+
+% Info box (blue)
+\newtcolorbox{infobox}[1][]{
+  enhanced,
+  breakable,
+  colback=infobg,
+  colframe=infoblue,
+  coltitle=white,
+  fonttitle=\bfseries,
+  title={\faInfoCircle\ #1},
+  left=8pt,
+  right=8pt,
+  top=6pt,
+  bottom=6pt,
+  boxrule=0pt,
+  leftrule=4pt,
+  arc=2pt
+}
+
+% Warning box (yellow)
+\newtcolorbox{warningbox}[1][]{
+  enhanced,
+  breakable,
+  colback=warningbg,
+  colframe=warningyellow,
+  coltitle=black,
+  fonttitle=\bfseries,
+  title={\faExclamationTriangle\ #1},
+  left=8pt,
+  right=8pt,
+  top=6pt,
+  bottom=6pt,
+  boxrule=0pt,
+  leftrule=4pt,
+  arc=2pt
+}
+
+% Tip box (green)
+\newtcolorbox{tipbox}[1][]{
+  enhanced,
+  breakable,
+  colback=tipbg,
+  colframe=tipgreen,
+  coltitle=white,
+  fonttitle=\bfseries,
+  title={\faLightbulb\ #1},
+  left=8pt,
+  right=8pt,
+  top=6pt,
+  bottom=6pt,
+  boxrule=0pt,
+  leftrule=4pt,
+  arc=2pt
+}
+
+% Danger/Important box (red)
+\newtcolorbox{dangerbox}[1][]{
+  enhanced,
+  breakable,
+  colback=dangerbg,
+  colframe=dangerred,
+  coltitle=white,
+  fonttitle=\bfseries,
+  title={\faExclamationCircle\ #1},
+  left=8pt,
+  right=8pt,
+  top=6pt,
+  bottom=6pt,
+  boxrule=0pt,
+  leftrule=4pt,
+  arc=2pt
+}
+
+% ============================================================
+% TABLE STYLING
+% ============================================================
+\renewcommand{\arraystretch}{1.3}
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+\newcolumntype{C}[1]{>{\centering\arraybackslash}p{#1}}
+\newcolumntype{R}[1]{>{\raggedleft\arraybackslash}p{#1}}
+
+% ============================================================
+% HEADER/FOOTER
+% ============================================================
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\textcolor{darkgray}{OH Stats Guide}}
+\fancyhead[R]{\small\textcolor{darkgray}{\thepage}}
+\fancyfoot[C]{\small\textcolor{darkgray}{oh\_stats v0.3.0}}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0pt}
+
+% ============================================================
+% QUOTE STYLING (for blockquotes)
+% ============================================================
+\renewenvironment{quote}{
+  \begin{mdframed}[
+    backgroundcolor=lightgray,
+    linecolor=primaryblue,
+    linewidth=0pt,
+    leftline=true,
+    leftmargin=0pt,
+    innerleftmargin=15pt,
+    innerrightmargin=10pt,
+    innertopmargin=8pt,
+    innerbottommargin=8pt,
+    skipabove=10pt,
+    skipbelow=10pt,
+    leftlinewidth=4pt
+  ]
+  \itshape
+}{\end{mdframed}}
+
+% ============================================================
+% MISC
+% ============================================================
+\setlength{\parskip}{0.5em}
+\setlength{\parindent}{0pt}
