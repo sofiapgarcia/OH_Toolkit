@@ -2,18 +2,27 @@
 
 ## Welcome!
 
-This tutorial will walk you through statistical analysis of Occupational Health data using `oh_stats`. 
+This tutorial will walk you through statistical analysis of Occupational Health (OH) data using `oh_stats`. 
 **No advanced statistics background required** - we'll explain everything as we go.
+
+The OH data ecosystem consists of two packages:
+- **oh_parser**: Extracts and validates data from OH profile JSON files
+- **oh_stats**: Performs statistical analysis on the extracted data
+
+These packages work with **multi-modal data** from OH profiles, including:
+- **Sensor data**: EMG, accelerometers, heart rate monitors, posture sensors
+- **Questionnaires**: COPSOQ, MUEQ, ROSA, IPAQ, OSPAQ, NPRS
+- **Daily self-reports**: Workload ratings, pain assessments
 
 By the end, you'll understand:
 - What exactly you're analyzing (the unit of analysis)
 - Why we use Linear Mixed Models (and why t-tests won't work here)
-- How to run a complete analysis
+- How to run a complete analysis for any modality
 - How to interpret your results
 - What numbers matter and what they mean
 - How to handle common edge cases
 
----
+
 
 ## Table of Contents
 
@@ -25,17 +34,29 @@ By the end, you'll understand:
 5. [The Multiple Testing Problem](#5-the-multiple-testing-problem)
 6. [Checking If Your Analysis Is Valid](#6-checking-if-your-analysis-is-valid)
 7. [Complete Example with Interpretation](#7-complete-example-with-interpretation)
-8. [Quick Reference Card](#8-quick-reference-card)
-9. [Glossary](#9-glossary)
-10. [Edge Cases & Troubleshooting](#10-edge-cases--troubleshooting)
+8. [Working with Different Data Types](#8-working-with-different-data-types)
+9. [Quick Reference Card](#9-quick-reference-card)
+10. [Glossary](#10-glossary)
+11. [Edge Cases & Troubleshooting](#11-edge-cases--troubleshooting)
 
----
+
 
 ## 0. What Are We Actually Analyzing?
 
 Before diving into statistics, let's be crystal clear about **what we're analyzing**.
 
-### The Unit of Analysis: Subject × Day
+### The OH Profile: Multi-Modal Health Data
+
+An OH (Occupational Health) profile contains multiple types of data collected from workers:
+
+| Data Type | Examples | Measurement Scale |
+|-----------|----------|-------------------|
+| **Sensor metrics** | EMG, accelerometer, heart rate | Continuous (numeric) |
+| **Questionnaires** | COPSOQ, MUEQ, ROSA, IPAQ, OSPAQ | Ordinal (scales) or Continuous (composite scores) |
+| **Daily self-reports** | Workload, pain ratings | Ordinal (Likert 1-5, NPRS 0-10) |
+| **Environmental** | Temperature, noise levels | Continuous |
+
+### The Unit of Analysis: Subject x Day
 
 Your primary unit of analysis is **one subject on one day**.
 
@@ -62,16 +83,16 @@ Your data violates both assumptions **by design** - and that's fine! We just nee
 oh_parser                          oh_stats
 ---------                          --------
 Load JSON profiles                 Prepare analysis tables
-Extract modality metrics    -->    Check data quality
+Extract ANY modality metrics -->   Check data quality
 Clean & validate data              Fit statistical models
                                    Correct for multiple testing
                                    Generate reports
 ```
 
-**oh_parser** extracts and validates your data.  
-**oh_stats** answers your research questions.
+**oh_parser** extracts and validates your data from JSON profiles.  
+**oh_stats** answers your research questions about that data.
 
----
+
 
 ## 1. The Problem: Why Can't We Just Use T-Tests?
 
@@ -123,7 +144,7 @@ Now imagine you flip it 10 times, but you COUNT EACH FLIP 10 TIMES. You now have
 
 **That's exactly what happens when you use t-tests on repeated measures data.**
 
----
+
 
 ## 2. The Solution: Linear Mixed Models
 
@@ -177,21 +198,59 @@ ICC = Between-subject variation / Total variation
 
 **If ICC is high, you REALLY need mixed models.** T-tests would be very wrong.
 
----
+
 
 ## 3. Your First Analysis: Step by Step
 
-### Step 1: Load Your Data
+### Step 1: Load Your Data and Discover What's Available
 
 ```python
 from oh_parser import load_profiles
-from oh_stats import prepare_daily_emg
+from oh_stats import (
+    get_profile_summary,
+    discover_sensors,
+    discover_questionnaires,
+    prepare_daily_emg,
+    prepare_sensor_data
+)
 
 # Load the OH profiles
 profiles = load_profiles("/path/to/OH_profiles")
 
-# Prepare for analysis (this creates a clean dataset)
+# FIRST: See what data is available (recommended!)
+print(get_profile_summary(profiles))
+
+# Output might look like:
+# OH Profile Summary (42 subjects)
+# ==================================================
+# 
+# SENSOR DATA:
+#   emg: 15 metrics
+#   heart_rate: 8 metrics
+#   noise: 6 metrics
+# 
+# SINGLE-INSTANCE QUESTIONNAIRES:
+#   personal: 31 fields
+#   biomechanical: 73 fields
+# 
+# DAILY QUESTIONNAIRES:
+#   workload: 6 fields
+
+# For more detail on a specific sensor:
+sensors = discover_sensors(profiles)
+print(sensors['heart_rate'])  # See available heart rate metrics
+
+# Option A: Use convenience function for EMG (common case)
 ds = prepare_daily_emg(profiles, side="both")
+
+# Option B: Use generic function for ANY sensor
+ds = prepare_sensor_data(
+    profiles,
+    sensor="heart_rate",
+    base_path="sensor_metrics.heart_rate",
+    level_names=["date"],
+    value_paths=["HR_BPM_stats.*", "HR_ratio_stats.*"],
+)
 
 # See what you have
 print(f"Number of observations: {len(ds['data'])}")
@@ -299,7 +358,7 @@ print(result['coefficients'])
 
 We'll explain how to interpret these in the next section!
 
----
+
 
 ## 4. Understanding Your Results
 
@@ -361,7 +420,7 @@ print(result['random_effects'])
 **This ICC of 0.50 tells us**: Mixed models were definitely the right choice! 
 Half of all variation is just "who the person is" - ignoring this would give wrong answers.
 
----
+
 
 ## 5. The Multiple Testing Problem
 
@@ -459,7 +518,7 @@ Layer 2 (within outcome): Holm on post-hoc contrasts
    "Which specific days differ?" (only for significant outcomes)
 ```
 
----
+
 
 ## 6. Checking If Your Analysis Is Valid
 
@@ -526,7 +585,7 @@ plt.show()
 - **QQ Plot**: Points follow the diagonal line (some wobble at edges is OK)
 - **Residuals vs Fitted**: Random scatter around zero, no funnel shape or curves
 
----
+
 
 ## 7. Complete Example with Interpretation
 
@@ -694,25 +753,205 @@ KEY FINDINGS:
    - Results account for repeated measures within subjects
 ```
 
----
 
-## 8. Quick Reference Card
+
+## 8. Working with Different Data Types
+
+The OH profile contains diverse data types that require different statistical approaches.
+
+### 8.1 Sensor Data (Continuous)
+
+Sensor data like EMG, accelerometer, and heart rate metrics are typically **continuous** - 
+they can take any numeric value within a range.
+
+```python
+from oh_stats import (
+    discover_sensors,
+    prepare_daily_emg,
+    prepare_sensor_data
+)
+
+# First: Discover what sensors are available
+sensors = discover_sensors(profiles)
+print(sensors.keys())  # e.g., ['emg', 'heart_rate', 'noise', 'environment']
+
+# EMG data (convenience function for the most common case)
+emg_ds = prepare_daily_emg(profiles, side="both")
+
+# Generic sensor data (works for ANY sensor!)
+# Just provide the path and structure
+
+# Heart rate data
+hr_ds = prepare_sensor_data(
+    profiles,
+    sensor="heart_rate",
+    base_path="sensor_metrics.heart_rate",
+    level_names=["date"],
+    value_paths=["HR_BPM_stats.*", "HR_ratio_stats.*"],
+)
+
+# Noise data
+noise_ds = prepare_sensor_data(
+    profiles,
+    sensor="noise",
+    base_path="sensor_metrics.noise",
+    level_names=["date"],
+    value_paths=["Noise_statistics.*"],
+)
+
+# Environment data
+env_ds = prepare_sensor_data(
+    profiles,
+    sensor="environment",
+    base_path="sensor_metrics.environment",
+    level_names=["date"],
+    value_paths=["*"],  # Get all environment metrics
+)
+```
+
+**Statistical treatment:** Standard Linear Mixed Models work well for continuous outcomes.
+The same analysis approach works regardless of which sensor the data came from - it's the
+**data type** (continuous, proportion, etc.) that determines the statistical method.
+
+### 8.2 Questionnaire Data
+
+Questionnaires come in different flavors:
+
+| Questionnaire | Measurement | Scale | Analysis Approach |
+|---------------|-------------|-------|-------------------|
+| COPSOQ | Psychosocial dimensions | 0-100 (computed) | Continuous LMM |
+| MUEQ | Ergonomic risk factors | 0-100 (computed) | Continuous LMM |
+| ROSA | Office strain assessment | 1-10 ordinal | Treat as continuous* |
+| IPAQ | Physical activity | MET-min/week | LOG transform + LMM |
+| OSPAQ | Sitting/standing time | % proportions | LOGIT transform + LMM |
+| NPRS | Pain rating | 0-10 ordinal | Treat as continuous* |
+
+*Ordinal scales with 5+ levels are commonly treated as continuous in practice.
+
+```python
+from oh_stats import (
+    prepare_baseline_questionnaires,
+    prepare_daily_pain,
+    prepare_daily_workload
+)
+
+# Single-instance questionnaires (baseline)
+baseline_ds = prepare_baseline_questionnaires(profiles, questionnaire_type="copsoq")
+
+# Daily repeated questionnaires
+pain_ds = prepare_daily_pain(profiles)
+workload_ds = prepare_daily_workload(profiles)
+
+# Analyze as usual
+result = fit_lmm(pain_ds, "nprs_neck")
+```
+
+### 8.3 Composite Scores from Likert Items
+
+Many questionnaires compute dimension scores from multiple Likert items:
+
+```python
+from oh_stats import compute_composite_score
+
+# Example: COPSOQ Quantitative Demands from 3 items
+df['copsoq_quant_demands'] = compute_composite_score(
+    df,
+    items=['q1_workload', 'q2_time_pressure', 'q3_pace'],
+    reverse_items=['q2_time_pressure'],  # Some items are reverse-coded
+    scale_max=5,
+    output_scale=(0, 100),  # Rescale to 0-100
+    missing_rule="half"  # Require at least half the items
+)
+```
+
+### 8.4 Proportion Data (Bounded 0-1)
+
+Some outcomes are proportions (e.g., % time in a posture, OSPAQ sitting percentage):
+
+```python
+from oh_stats import fit_lmm, TransformType
+
+# OSPAQ percentages are bounded [0, 1]
+# The LOGIT transform handles this
+result = fit_lmm(
+    ospaq_ds, 
+    "ospaq_sitting_pct",
+    transform=TransformType.LOGIT  # Automatic for registered proportions
+)
+```
+
+**What LOGIT does:** Transforms bounded [0,1] data to unbounded (-inf, +inf) for proper LMM fitting.
+
+### 8.5 Multi-Modal Analysis
+
+Combine sensor data with questionnaires to answer questions like:
+"Does perceived workload predict muscle activity?"
+
+```python
+from oh_stats import align_sensor_questionnaire
+
+# Merge EMG with daily workload on subject x date
+merged_ds = align_sensor_questionnaire(emg_ds, workload_ds)
+
+# Now analyze EMG with workload as a predictor
+result = fit_lmm(
+    merged_ds,
+    outcome="EMG_intensity.mean_percent_mvc",
+    fixed_effects=["day_index", "workload_composite"],
+    day_as_categorical=False
+)
+```
+
+### 8.6 Summary: Choosing the Right Approach
+
+| Data Type | Example | Recommended Approach |
+|-----------|---------|---------------------|
+| Continuous | EMG %MVC | Standard LMM |
+| Right-skewed | IPAQ MET-min | LOG1P transform + LMM |
+| Proportions | OSPAQ %, rest_percent | LOGIT transform + LMM |
+| Ordinal 5+ levels | ROSA, NPRS | Treat as continuous (pragmatic) |
+| Ordinal <5 levels | Likert items | Compute composite, then LMM |
+| Binary | Yes/No outcomes | Logistic GLMM (future) |
+
+
+
+## 9. Quick Reference Card
 
 ### Minimal Workflow
 
 ```python
 from oh_parser import load_profiles
-from oh_stats import prepare_daily_emg, fit_lmm, apply_fdr, fit_all_outcomes
+from oh_stats import (
+    get_profile_summary,
+    discover_sensors,
+    prepare_daily_emg,
+    prepare_sensor_data,
+    fit_lmm,
+    apply_fdr,
+    fit_all_outcomes
+)
 
-# 1. Load
+# 1. Load and Discover
 profiles = load_profiles("/path/to/data")
+print(get_profile_summary(profiles))  # See what's available
+
+# 2. Prepare ANY sensor data (generic approach)
+ds = prepare_sensor_data(
+    profiles,
+    sensor="your_sensor",
+    base_path="sensor_metrics.your_sensor",
+    level_names=["date"],
+    value_paths=["metric_pattern.*"],
+)
+
+# Or use convenience functions for common sensors
 ds = prepare_daily_emg(profiles, side="both")
 
-# 2. Single outcome
-result = fit_lmm(ds, "EMG_intensity.mean_percent_mvc")
+# 3. Single outcome
+result = fit_lmm(ds, "your_outcome")
 print(result['coefficients'])
 
-# 3. Multiple outcomes with correction
+# 4. Multiple outcomes with correction
 results = fit_all_outcomes(ds, max_outcomes=10)
 fdr = apply_fdr(results)
 print(fdr[fdr['significant']])
@@ -763,9 +1002,9 @@ START: Do you have repeated measures per subject?
                               Report adjusted p-values
 ```
 
----
 
-## 9. Glossary
+
+## 10. Glossary
 
 | Term | Plain English Definition |
 |------|-------------------------|
@@ -783,9 +1022,9 @@ START: Do you have repeated measures per subject?
 | **Standard Error (SE)** | How uncertain we are about an estimate. Smaller = more confident. |
 | **Transform** | Converting data (e.g., LOG) to make it better behaved for modeling. |
 
----
 
-## 10. Edge Cases & Troubleshooting
+
+## 11. Edge Cases & Troubleshooting
 
 Real data is messy. Here's how to handle common problems.
 
@@ -965,7 +1204,7 @@ ds['data']['log_rate'] = np.log1p(ds['data']['rate'])
     -> Are you using FDR correction? Check for data leakage
 ```
 
----
+
 
 ## Still Confused?
 
@@ -978,6 +1217,6 @@ That's OK! Statistics is hard. Here are some resources:
 Or just run the code and focus on the **plain English summaries**. You don't need to understand 
 every detail to get useful results - that's why we built this package!
 
----
 
-*OH Stats Tutorial v1.1 - January 2026*
+
+*OH Stats Tutorial v2.0 (for oh_stats v0.3.0) - January 2026*

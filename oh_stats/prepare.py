@@ -231,11 +231,134 @@ def describe_dataset(ds: AnalysisDataset) -> str:
 
 
 # =============================================================================
-# EMG Data Preparation
+# Generic Sensor Data Preparation
 # =============================================================================
 
 SideOption = Literal["left", "right", "both", "average"]
 
+
+def prepare_sensor_data(
+    profiles: Dict[str, dict],
+    sensor: str,
+    base_path: str,
+    level_names: List[str],
+    value_paths: List[str],
+    level_filter: Optional[Dict[str, str]] = None,
+    side: SideOption = "both",
+    add_day_index: bool = True,
+    add_weekday: bool = True,
+) -> AnalysisDataset:
+    """
+    Generic preparation function for any sensor data from OH profiles.
+    
+    This is the core function for preparing sensor data. Modality-specific
+    functions like prepare_daily_emg() are convenience wrappers around this.
+    
+    :param profiles: Dictionary mapping subject_id -> OH profile dict
+    :param sensor: Sensor name (e.g., "emg", "accelerometer", "heart_rate")
+    :param base_path: Base JSON path to sensor data (e.g., "sensor_metrics.emg")
+    :param level_names: Names for nested levels (e.g., ["date", "level", "side"])
+    :param value_paths: Glob patterns for values to extract (e.g., ["EMG_intensity.*"])
+    :param level_filter: Filter dict to apply (e.g., {"level": "EMG_daily_metrics"})
+    :param side: How to handle sides ("left", "right", "both", "average")
+    :param add_day_index: Add within-subject day index (1, 2, 3, ...)
+    :param add_weekday: Add weekday name column
+    :returns: AnalysisDataset dictionary
+    
+    Example:
+        >>> # Prepare accelerometer data
+        >>> ds = prepare_sensor_data(
+        ...     profiles,
+        ...     sensor="accelerometer",
+        ...     base_path="sensor_metrics.accelerometer",
+        ...     level_names=["date", "placement"],
+        ...     value_paths=["activity.*", "posture.*"],
+        ...     add_day_index=True
+        ... )
+    """
+    from oh_parser import extract_nested
+    
+    df = extract_nested(
+        profiles,
+        base_path=base_path,
+        level_names=level_names,
+        value_paths=value_paths,
+        flatten_values=True,
+    )
+    
+    if df.empty:
+        warnings.warn(f"No {sensor} data found in profiles")
+        return create_analysis_dataset(
+            data=pd.DataFrame(),
+            outcome_vars=[],
+            sensor=sensor,
+            level="daily",
+        )
+    
+    # Apply level filter if provided
+    if level_filter:
+        for col, val in level_filter.items():
+            if col in df.columns:
+                df = df[df[col] == val].copy()
+                df = df.drop(columns=[col])
+    
+    # Parse dates - look for common date column names
+    date_col = None
+    for col in ["date", "Date", "DATE", "timestamp"]:
+        if col in df.columns:
+            date_col = col
+            break
+    
+    if date_col:
+        df["date"] = _parse_date_column(df[date_col])
+        if date_col != "date":
+            df = df.drop(columns=[date_col])
+        
+        # Remove rows with unparseable dates
+        n_before = len(df)
+        df = df.dropna(subset=["date"])
+        if len(df) < n_before:
+            warnings.warn(f"Dropped {n_before - len(df)} rows with unparseable dates")
+    
+    # Handle sides if present
+    grouping_vars = []
+    if "side" in df.columns:
+        df, grouping_vars = _handle_sides(df, side)
+    
+    # Add day index
+    if add_day_index and "date" in df.columns:
+        df = _add_day_index(df)
+    
+    # Add weekday
+    if add_weekday and "date" in df.columns:
+        df["weekday"] = df["date"].dt.day_name()
+    
+    # Sort for reproducibility
+    sort_cols = ["subject_id"]
+    if "date" in df.columns:
+        sort_cols.append("date")
+    if "side" in df.columns:
+        sort_cols.append("side")
+    df = df.sort_values(sort_cols).reset_index(drop=True)
+    
+    # Identify outcome columns (exclude metadata columns)
+    meta_cols = {"subject_id", "date", "side", "day_index", "weekday"}
+    outcome_vars = [c for c in df.columns if c not in meta_cols]
+    
+    return create_analysis_dataset(
+        data=df,
+        outcome_vars=outcome_vars,
+        id_var="subject_id",
+        time_var="date" if "date" in df.columns else "day_index",
+        grouping_vars=grouping_vars,
+        sensor=sensor,
+        level="daily",
+    )
+
+
+# =============================================================================
+# EMG Data Preparation (Convenience Wrapper)
+# =============================================================================
 
 def prepare_daily_emg(
     profiles: Dict[str, dict],
@@ -590,4 +713,618 @@ def prepare_weekly_emg(
         grouping_vars=grouping_vars,
         sensor="emg",
         level="weekly",
+    )
+
+
+# =============================================================================
+# Profile Discovery Functions
+# =============================================================================
+
+def discover_sensors(profiles: Dict[str, dict]) -> Dict[str, List[str]]:
+    """
+    Discover available sensors and their data keys from OH profiles.
+    
+    Inspects the sensor_metrics section of profiles to find what sensors
+    have data available. This helps users know what data can be extracted.
+    
+    :param profiles: Dictionary mapping subject_id -> OH profile dict
+    :returns: Dict mapping sensor names to list of available metric keys
+    
+    Example:
+        >>> profiles = load_profiles("/path/to/OH_profiles")
+        >>> sensors = discover_sensors(profiles)
+        >>> print(sensors)
+        {'heart_rate': ['HR_BPM_stats', 'HR_ratio_stats', ...],
+         'noise': ['Noise_statistics', 'Noise_distributions', ...],
+         'emg': ['EMG_intensity', 'EMG_apdf', ...]}
+    """
+    all_sensors: Dict[str, set] = {}
+    
+    for subject_id, profile in profiles.items():
+        sensor_metrics = profile.get("sensor_metrics", {})
+        
+        for sensor_name, sensor_data in sensor_metrics.items():
+            if sensor_name == "sensor_timeline":
+                continue  # Skip metadata
+                
+            if not isinstance(sensor_data, dict):
+                continue
+            
+            if sensor_name not in all_sensors:
+                all_sensors[sensor_name] = set()
+            
+            # Collect keys from the sensor data
+            _collect_keys(sensor_data, all_sensors[sensor_name])
+    
+    # Convert sets to sorted lists
+    return {k: sorted(v) for k, v in all_sensors.items()}
+
+
+def _collect_keys(data: dict, keys: set, depth: int = 0, max_depth: int = 3) -> None:
+    """Recursively collect keys from nested dict structure."""
+    if depth >= max_depth:
+        return
+    
+    for key, value in data.items():
+        # Skip date-like keys (they're the time dimension, not metrics)
+        if _looks_like_date(key):
+            if isinstance(value, dict):
+                _collect_keys(value, keys, depth + 1, max_depth)
+            continue
+        
+        keys.add(key)
+        
+        if isinstance(value, dict) and depth < max_depth - 1:
+            # For nested dicts like HR_BPM_stats, add the nested keys too
+            for nested_key in value.keys():
+                if not _looks_like_date(nested_key):
+                    keys.add(f"{key}.{nested_key}")
+
+
+def _looks_like_date(s: str) -> bool:
+    """Check if a string looks like a date or time key."""
+    import re
+    # Patterns: DD-MM-YYYY, YYYY-MM-DD, HH-MM-SS, etc.
+    date_patterns = [
+        r'^\d{2}-\d{2}-\d{4}$',  # DD-MM-YYYY
+        r'^\d{4}-\d{2}-\d{2}$',  # YYYY-MM-DD
+        r'^\d{2}-\d{2}-\d{2}$',  # HH-MM-SS
+    ]
+    return any(re.match(p, s) for p in date_patterns)
+
+
+def discover_questionnaires(profiles: Dict[str, dict]) -> Dict[str, List[str]]:
+    """
+    Discover available questionnaire domains and their fields from OH profiles.
+    
+    :param profiles: Dictionary mapping subject_id -> OH profile dict
+    :returns: Dict with 'single_instance' and 'daily' keys, each mapping
+              domain names to lists of field names
+    
+    Example:
+        >>> profiles = load_profiles("/path/to/OH_profiles")
+        >>> quests = discover_questionnaires(profiles)
+        >>> print(quests['single_instance'].keys())
+        dict_keys(['personal', 'biomechanical', 'psychosocial', 'environmental'])
+    """
+    result = {
+        "single_instance": {},
+        "daily": {},
+    }
+    
+    for subject_id, profile in profiles.items():
+        # Single-instance questionnaires
+        siq = profile.get("single_instance_questionnaires", {})
+        for domain, domain_data in siq.items():
+            if not isinstance(domain_data, dict):
+                continue
+            if domain not in result["single_instance"]:
+                result["single_instance"][domain] = set()
+            result["single_instance"][domain].update(domain_data.keys())
+        
+        # Daily questionnaires
+        daily_q = profile.get("daily_questionnaires", {})
+        for domain, domain_data in daily_q.items():
+            if not isinstance(domain_data, dict):
+                continue
+            if domain not in result["daily"]:
+                result["daily"][domain] = set()
+            
+            for date_key, day_data in domain_data.items():
+                if isinstance(day_data, dict):
+                    result["daily"][domain].update(day_data.keys())
+    
+    # Convert sets to sorted lists
+    return {
+        "single_instance": {k: sorted(v) for k, v in result["single_instance"].items()},
+        "daily": {k: sorted(v) for k, v in result["daily"].items()},
+    }
+
+
+def get_profile_summary(profiles: Dict[str, dict]) -> str:
+    """
+    Generate a summary of available data in OH profiles.
+    
+    :param profiles: Dictionary mapping subject_id -> OH profile dict
+    :returns: Human-readable summary string
+    
+    Example:
+        >>> profiles = load_profiles("/path/to/OH_profiles")
+        >>> print(get_profile_summary(profiles))
+    """
+    sensors = discover_sensors(profiles)
+    quests = discover_questionnaires(profiles)
+    
+    lines = [
+        f"OH Profile Summary ({len(profiles)} subjects)",
+        "=" * 50,
+        "",
+        "SENSOR DATA:",
+    ]
+    
+    if sensors:
+        for sensor, keys in sorted(sensors.items()):
+            lines.append(f"  {sensor}: {len(keys)} metrics")
+    else:
+        lines.append("  No sensor data found")
+    
+    lines.extend(["", "SINGLE-INSTANCE QUESTIONNAIRES:"])
+    if quests["single_instance"]:
+        for domain, fields in sorted(quests["single_instance"].items()):
+            lines.append(f"  {domain}: {len(fields)} fields")
+    else:
+        lines.append("  No single-instance questionnaires found")
+    
+    lines.extend(["", "DAILY QUESTIONNAIRES:"])
+    if quests["daily"]:
+        for domain, fields in sorted(quests["daily"].items()):
+            lines.append(f"  {domain}: {len(fields)} fields")
+    else:
+        lines.append("  No daily questionnaires found")
+    
+    return "\n".join(lines)
+
+
+# =============================================================================
+# Single-Instance Questionnaire Preparation
+# =============================================================================
+
+def prepare_baseline_questionnaires(
+    profiles: Dict[str, dict],
+    domains: Optional[List[str]] = None,
+    convert_percentages: bool = True,
+) -> AnalysisDataset:
+    """
+    Prepare single-instance (baseline) questionnaire data for analysis.
+    
+    Extracts data from single_instance_questionnaires (personal, biomechanical,
+    psychosocial, environmental) for cross-sectional analysis.
+    
+    :param profiles: Dictionary mapping subject_id -> OH profile dict
+    :param domains: Specific domains to include (None = all available)
+    :param convert_percentages: Convert percentage values (0-100) to proportions (0-1)
+    :returns: AnalysisDataset dict with baseline questionnaire data
+    
+    Note: This is SINGLE level data - one observation per subject.
+    Use for between-subject comparisons only.
+    """
+    from oh_parser import resolve_path
+    
+    available_domains = ["personal", "biomechanical", "psychosocial", "environmental"]
+    domains = domains or available_domains
+    
+    rows = []
+    
+    for subject_id, profile in profiles.items():
+        row = {"subject_id": subject_id}
+        
+        siq = profile.get("single_instance_questionnaires", {})
+        
+        for domain in domains:
+            domain_data = siq.get(domain, {})
+            if not domain_data or not isinstance(domain_data, dict):
+                continue
+            
+            # Flatten domain data
+            flat = _flatten_questionnaire_domain(domain_data, prefix=domain)
+            row.update(flat)
+        
+        if len(row) > 1:  # Has data beyond subject_id
+            rows.append(row)
+    
+    if not rows:
+        warnings.warn("No baseline questionnaire data found")
+        return create_analysis_dataset(
+            data=pd.DataFrame(),
+            outcome_vars=[],
+            sensor="questionnaire",
+            level="single",
+        )
+    
+    df = pd.DataFrame(rows)
+    
+    # Convert percentage columns to proportions if requested
+    if convert_percentages:
+        df = _convert_percentages_to_proportions(df)
+    
+    # Identify outcome columns
+    meta_cols = {"subject_id"}
+    outcome_vars = [c for c in df.columns if c not in meta_cols]
+    
+    return create_analysis_dataset(
+        data=df,
+        outcome_vars=outcome_vars,
+        id_var="subject_id",
+        time_var="subject_id",  # No time dimension for single-instance
+        grouping_vars=[],
+        sensor="questionnaire",
+        level="single",
+    )
+
+
+def _flatten_questionnaire_domain(
+    data: dict,
+    prefix: str = "",
+    sep: str = ".",
+) -> Dict[str, Any]:
+    """
+    Flatten nested questionnaire domain data.
+    
+    Handles special cases like COPSOQ nested structure.
+    """
+    flat = {}
+    
+    for key, value in data.items():
+        full_key = f"{prefix}{sep}{key}" if prefix else key
+        
+        if isinstance(value, dict):
+            # Check if it's a simple stats dict (like {"mean": 0.4})
+            if set(value.keys()) <= {"mean", "mean_FO", "std", "min", "max"}:
+                # Extract the mean value
+                if "mean" in value:
+                    flat[full_key] = value["mean"]
+                elif "mean_FO" in value:
+                    flat[f"{full_key}_FO"] = value["mean_FO"]
+            else:
+                # Recurse
+                nested = _flatten_questionnaire_domain(value, prefix=full_key, sep=sep)
+                flat.update(nested)
+        else:
+            flat[full_key] = value
+    
+    return flat
+
+
+def _convert_percentages_to_proportions(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Convert percentage columns (0-100) to proportions (0-1).
+    
+    Identifies columns likely to be percentages and converts them.
+    """
+    df = df.copy()
+    
+    # Patterns that indicate percentage columns
+    pct_patterns = [
+        "percentagem", "percent", "_pct", "percentage",
+        "ROSA_.*_normalized", "ROSA_final_normalized"
+    ]
+    
+    for col in df.columns:
+        # Check if column name suggests percentage
+        is_pct_col = any(
+            pattern.lower() in col.lower() or 
+            col.lower().endswith("_pct")
+            for pattern in pct_patterns[:4]
+        )
+        
+        # Also check if values are in 0-100 range (not 0-1)
+        if is_pct_col and df[col].dtype in [np.float64, np.int64, float, int]:
+            values = df[col].dropna()
+            if len(values) > 0 and values.max() > 1:
+                df[col] = df[col] / 100.0
+    
+    return df
+
+
+def prepare_daily_workload(
+    profiles: Dict[str, dict],
+    add_day_index: bool = True,
+    add_weekday: bool = True,
+) -> Optional[AnalysisDataset]:
+    """
+    Prepare daily workload questionnaire data for analysis.
+    
+    Extracts workload Likert items from daily_questionnaires.workload.
+    
+    :param profiles: Dictionary mapping subject_id -> OH profile dict
+    :param add_day_index: Add within-subject day index
+    :param add_weekday: Add weekday name column
+    :returns: AnalysisDataset dict or None if no data
+    """
+    rows = []
+    
+    for subject_id, profile in profiles.items():
+        daily_q = profile.get("daily_questionnaires", {})
+        workload_data = daily_q.get("workload", {})
+        
+        if not workload_data:
+            continue
+        
+        for date_str, day_data in workload_data.items():
+            # Skip non-data entries
+            if date_str == "scoring" or not isinstance(day_data, dict):
+                continue
+            if day_data == "No data available":
+                continue
+            
+            row = {
+                "subject_id": subject_id,
+                "date": date_str,
+            }
+            
+            # Extract workload items
+            for item, value in day_data.items():
+                if item != "open_question" and not pd.isna(value):
+                    row[f"workload.{item}"] = value
+            
+            if len(row) > 2:  # Has data beyond subject_id and date
+                rows.append(row)
+    
+    if not rows:
+        return None
+    
+    df = pd.DataFrame(rows)
+    
+    # Parse dates
+    df["date"] = _parse_date_column(df["date"])
+    df = df.dropna(subset=["date"])
+    
+    if df.empty:
+        return None
+    
+    # Add day index
+    if add_day_index:
+        df = _add_day_index(df)
+    
+    # Add weekday
+    if add_weekday:
+        df["weekday"] = df["date"].dt.day_name()
+    
+    # Sort
+    df = df.sort_values(["subject_id", "date"]).reset_index(drop=True)
+    
+    # Identify outcome columns
+    meta_cols = {"subject_id", "date", "day_index", "weekday"}
+    outcome_vars = [c for c in df.columns if c not in meta_cols]
+    
+    return create_analysis_dataset(
+        data=df,
+        outcome_vars=outcome_vars,
+        id_var="subject_id",
+        time_var="date",
+        grouping_vars=[],
+        sensor="questionnaire",
+        level="daily",
+    )
+
+
+def prepare_daily_pain(
+    profiles: Dict[str, dict],
+    add_day_index: bool = True,
+    add_weekday: bool = True,
+) -> Optional[AnalysisDataset]:
+    """
+    Prepare daily pain questionnaire data for analysis.
+    
+    Extracts pain ratings from daily_questionnaires.pain.
+    
+    :param profiles: Dictionary mapping subject_id -> OH profile dict
+    :param add_day_index: Add within-subject day index
+    :param add_weekday: Add weekday name column
+    :returns: AnalysisDataset dict or None if no data
+    """
+    rows = []
+    
+    for subject_id, profile in profiles.items():
+        daily_q = profile.get("daily_questionnaires", {})
+        pain_data = daily_q.get("pain", {})
+        
+        if not pain_data:
+            continue
+        
+        for date_str, day_data in pain_data.items():
+            if not isinstance(day_data, dict):
+                continue
+            
+            row = {
+                "subject_id": subject_id,
+                "date": date_str,
+            }
+            
+            # Extract pain items
+            for item, value in day_data.items():
+                if not pd.isna(value):
+                    row[f"pain.{item}"] = value
+            
+            if len(row) > 2:
+                rows.append(row)
+    
+    if not rows:
+        return None
+    
+    df = pd.DataFrame(rows)
+    
+    # Parse dates
+    df["date"] = _parse_date_column(df["date"])
+    df = df.dropna(subset=["date"])
+    
+    if df.empty:
+        return None
+    
+    # Add day index
+    if add_day_index:
+        df = _add_day_index(df)
+    
+    # Add weekday
+    if add_weekday:
+        df["weekday"] = df["date"].dt.day_name()
+    
+    # Sort
+    df = df.sort_values(["subject_id", "date"]).reset_index(drop=True)
+    
+    # Identify outcome columns
+    meta_cols = {"subject_id", "date", "day_index", "weekday"}
+    outcome_vars = [c for c in df.columns if c not in meta_cols]
+    
+    return create_analysis_dataset(
+        data=df,
+        outcome_vars=outcome_vars,
+        id_var="subject_id",
+        time_var="date",
+        grouping_vars=[],
+        sensor="questionnaire",
+        level="daily",
+    )
+
+
+# =============================================================================
+# Composite Score Computation
+# =============================================================================
+
+def compute_composite_score(
+    df: pd.DataFrame,
+    items: List[str],
+    score_name: str,
+    method: str = "mean",
+    min_valid_pct: float = 0.8,
+    reverse_items: Optional[List[str]] = None,
+    scale_max: Optional[int] = None,
+) -> pd.DataFrame:
+    """
+    Compute composite score from multiple items.
+    
+    :param df: DataFrame with item columns
+    :param items: List of column names to aggregate
+    :param score_name: Name for the new composite score column
+    :param method: Aggregation method ("mean", "sum")
+    :param min_valid_pct: Minimum percentage of non-missing items required
+    :param reverse_items: Items to reverse-code before aggregation
+    :param scale_max: Maximum scale value for reverse coding (e.g., 5 for Likert 1-5)
+    :returns: DataFrame with new composite score column
+    
+    Example:
+        >>> df = compute_composite_score(
+        ...     df, 
+        ...     items=["item1", "item2", "item3"],
+        ...     score_name="domain_score",
+        ...     reverse_items=["item2"],
+        ...     scale_max=5,
+        ... )
+    """
+    df = df.copy()
+    
+    # Check which items exist
+    existing_items = [i for i in items if i in df.columns]
+    if not existing_items:
+        warnings.warn(f"None of the items {items} found in DataFrame")
+        df[score_name] = np.nan
+        return df
+    
+    # Reverse code items if needed
+    if reverse_items and scale_max:
+        for item in reverse_items:
+            if item in df.columns:
+                df[f"{item}_rev"] = scale_max + 1 - df[item]
+                existing_items = [
+                    f"{i}_rev" if i == item else i 
+                    for i in existing_items
+                ]
+    
+    # Count valid items per row
+    valid_counts = df[existing_items].notna().sum(axis=1)
+    min_valid = int(len(existing_items) * min_valid_pct)
+    
+    # Compute score
+    if method == "mean":
+        df[score_name] = df[existing_items].mean(axis=1)
+    elif method == "sum":
+        df[score_name] = df[existing_items].sum(axis=1)
+    else:
+        raise ValueError(f"Unknown method: {method}")
+    
+    # Set to NA if insufficient valid items
+    df.loc[valid_counts < min_valid, score_name] = np.nan
+    
+    return df
+
+
+# =============================================================================
+# Data Alignment (Sensor + Questionnaire)
+# =============================================================================
+
+def align_sensor_questionnaire(
+    sensor_ds: AnalysisDataset,
+    questionnaire_ds: AnalysisDataset,
+    how: str = "inner",
+) -> AnalysisDataset:
+    """
+    Align sensor data with daily questionnaire data by subject×date.
+    
+    :param sensor_ds: AnalysisDataset with sensor data (e.g., daily EMG)
+    :param questionnaire_ds: AnalysisDataset with daily questionnaire data
+    :param how: Join type ("inner", "left", "outer")
+    :returns: Combined AnalysisDataset
+    
+    Note: Reports days with missing sensor or questionnaire data.
+    """
+    sensor_df = sensor_ds["data"].copy()
+    quest_df = questionnaire_ds["data"].copy()
+    
+    # Ensure date columns are comparable
+    if "date" not in sensor_df.columns or "date" not in quest_df.columns:
+        raise ValueError("Both datasets must have 'date' column")
+    
+    # Merge on subject_id and date
+    merge_cols = ["subject_id", "date"]
+    
+    # Add day_index from sensor if present
+    if "day_index" in sensor_df.columns and "day_index" not in quest_df.columns:
+        merge_cols_quest = ["subject_id", "date"]
+    else:
+        merge_cols_quest = merge_cols
+    
+    merged = sensor_df.merge(
+        quest_df,
+        on=["subject_id", "date"],
+        how=how,
+        suffixes=("", "_quest"),
+    )
+    
+    # Report alignment
+    n_sensor = len(sensor_df)
+    n_quest = len(quest_df)
+    n_merged = len(merged)
+    
+    if how == "inner" and n_merged < min(n_sensor, n_quest):
+        warnings.warn(
+            f"Alignment: {n_sensor} sensor rows, {n_quest} questionnaire rows, "
+            f"{n_merged} matched. {n_sensor - n_merged} sensor-only, "
+            f"{n_quest - n_merged} questionnaire-only days excluded."
+        )
+    
+    # Combine outcome vars
+    combined_outcomes = list(set(sensor_ds["outcome_vars"]) | set(questionnaire_ds["outcome_vars"]))
+    combined_outcomes = [c for c in combined_outcomes if c in merged.columns]
+    
+    # Combine grouping vars
+    combined_grouping = list(set(sensor_ds["grouping_vars"]) | set(questionnaire_ds["grouping_vars"]))
+    
+    return create_analysis_dataset(
+        data=merged,
+        outcome_vars=combined_outcomes,
+        id_var="subject_id",
+        time_var="date",
+        grouping_vars=combined_grouping,
+        sensor="combined",
+        level="daily",
     )

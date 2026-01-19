@@ -39,7 +39,7 @@ Usage:
 """
 from __future__ import annotations
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 # Registry - Enums and TypedDicts
 from .registry import (
@@ -56,6 +56,10 @@ from .registry import (
     get_continuous_outcomes,
     get_proportion_outcomes,
     get_count_outcomes,
+    get_questionnaire_outcomes,
+    get_emg_outcomes,
+    get_daily_outcomes,
+    get_single_instance_outcomes,
     reset_registry,
 )
 
@@ -70,9 +74,23 @@ from .prepare import (
     get_n_observations,
     get_date_range,
     get_obs_per_subject,
+    # Generic preparation
+    prepare_sensor_data,
+    # Discovery functions
+    discover_sensors,
+    discover_questionnaires,
+    get_profile_summary,
+    # EMG convenience wrappers (common use case)
     prepare_daily_emg,
-    prepare_daily_questionnaires,
     prepare_weekly_emg,
+    # Questionnaire preparation (special nested structure)
+    prepare_daily_questionnaires,
+    prepare_baseline_questionnaires,
+    prepare_daily_workload,
+    prepare_daily_pain,
+    # Utilities
+    compute_composite_score,
+    align_sensor_questionnaire,
     parse_date,
 )
 
@@ -166,6 +184,10 @@ __all__ = [
     "get_continuous_outcomes",
     "get_proportion_outcomes",
     "get_count_outcomes",
+    "get_questionnaire_outcomes",
+    "get_emg_outcomes",
+    "get_daily_outcomes",
+    "get_single_instance_outcomes",
     "reset_registry",
     
     # Prepare - TypedDict and functions
@@ -178,9 +200,23 @@ __all__ = [
     "get_n_observations",
     "get_date_range",
     "get_obs_per_subject",
+    # Generic preparation
+    "prepare_sensor_data",
+    # Discovery functions
+    "discover_sensors",
+    "discover_questionnaires",
+    "get_profile_summary",
+    # EMG convenience wrappers
     "prepare_daily_emg",
-    "prepare_daily_questionnaires",
     "prepare_weekly_emg",
+    # Questionnaire preparation
+    "prepare_daily_questionnaires",
+    "prepare_baseline_questionnaires",
+    "prepare_daily_workload",
+    "prepare_daily_pain",
+    # Utilities
+    "compute_composite_score",
+    "align_sensor_questionnaire",
     "parse_date",
     
     # Descriptive - TypedDicts and functions

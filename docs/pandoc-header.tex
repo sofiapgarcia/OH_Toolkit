@@ -1,0 +1,30 @@
+% Code block styling with frames
+\usepackage{framed}
+\usepackage{xcolor}
+\usepackage{mdframed}
+
+% Define colors
+\definecolor{codebg}{RGB}{248,248,248}
+\definecolor{codeframe}{RGB}{200,200,200}
+
+% Style for code blocks (Shaded environment used by pandoc)
+\renewenvironment{Shaded}{
+  \begin{mdframed}[
+    backgroundcolor=codebg,
+    linecolor=codeframe,
+    linewidth=1pt,
+    topline=true,
+    bottomline=true,
+    leftline=true,
+    rightline=true,
+    innerleftmargin=10pt,
+    innerrightmargin=10pt,
+    innertopmargin=10pt,
+    innerbottommargin=10pt,
+    skipabove=10pt,
+    skipbelow=10pt
+  ]
+}{\end{mdframed}}
+
+% Reduce code font size slightly
+\AtBeginEnvironment{Highlighting}{\small}

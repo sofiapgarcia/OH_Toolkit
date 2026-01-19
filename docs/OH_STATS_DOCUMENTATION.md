@@ -1,27 +1,6 @@
 # OH Stats: Complete Statistical Analysis Guide
 
-## Table of Contents
 
-1. [Introduction](#1-introduction)
-2. [Architecture Overview](#2-architecture-overview)
-3. [Data Flow Pipeline](#3-data-flow-pipeline)
-4. [Module Reference](#4-module-reference)
-   - [4.1 Registry (registry.py)](#41-registry-registrypy)
-   - [4.2 Data Preparation (prepare.py)](#42-data-preparation-preparepy)
-   - [4.3 Descriptive Statistics (descriptive.py)](#43-descriptive-statistics-descriptivepy)
-   - [4.4 Linear Mixed Models (lmm.py)](#44-linear-mixed-models-lmmpy)
-   - [4.5 Post-Hoc Comparisons (posthoc.py)](#45-post-hoc-comparisons-posthocpy)
-   - [4.6 Multiplicity Correction (multiplicity.py)](#46-multiplicity-correction-multiplicitypy)
-   - [4.7 Model Diagnostics (diagnostics.py)](#47-model-diagnostics-diagnosticspy)
-   - [4.8 Report Generation (report.py)](#48-report-generation-reportpy)
-5. [Statistical Methods Deep Dive](#5-statistical-methods-deep-dive)
-6. [Complete Workflow Examples](#6-complete-workflow-examples)
-7. [Edge Cases and Error Handling](#7-edge-cases-and-error-handling)
-8. [Best Practices](#8-best-practices)
-9. [Glossary](#9-glossary)
-10. [Future Extensions: Multi-Modal Ready](#10-future-extensions-multi-modal-ready)
-
----
 
 ## 1. Introduction
 
@@ -35,9 +14,10 @@ The OH profile data has specific characteristics that require specialized handli
 
 1. **Repeated measures**: Each subject contributes multiple observations across days
 2. **Hierarchical structure**: Observations nested within subjects
-3. **Multiple outcomes**: Many EMG metrics measured simultaneously
-4. **Laterality**: Separate measurements for left and right sides
-5. **Non-normal distributions**: Many outcomes are skewed or bounded
+3. **Multi-modal data**: Multiple sensors (EMG, heart rate, noise, etc.) and questionnaires
+4. **Multiple outcomes**: Many metrics measured simultaneously per sensor
+5. **Laterality**: Separate measurements for left and right sides (EMG)
+6. **Non-normal distributions**: Many outcomes are skewed or bounded
 
 Standard statistical approaches (t-tests, ANOVA) are inappropriate because they:
 - Ignore the correlation structure within subjects
@@ -46,13 +26,15 @@ Standard statistical approaches (t-tests, ANOVA) are inappropriate because they:
 
 ### Key Design Principles
 
-1. **Registry-driven**: Each outcome is registered with its measurement type (continuous, ordinal, proportion, count), guiding model selection
-2. **Multilevel inference**: Linear Mixed Models (LMM) account for subject-level clustering
-3. **Two-layer multiplicity control**: FDR across outcomes, Holm within outcomes
-4. **Diagnostic-first**: Check assumptions before trusting results
-5. **Function-based architecture**: All data containers use TypedDicts with factory functions for code homogeneity
+1. **Generic data-type based**: Analysis is driven by outcome **data type** (continuous, ordinal, proportion, count), not sensor source. `oh_parser` extracts data from any sensor, `oh_stats` analyzes based on data type.
+2. **Registry-driven**: Each outcome is registered with its measurement type, guiding model selection and transform recommendations
+3. **Multilevel inference**: Linear Mixed Models (LMM) account for subject-level clustering
+4. **Two-layer multiplicity control**: FDR across outcomes, Holm within outcomes
+5. **Diagnostic-first**: Check assumptions before trusting results
+6. **Function-based architecture**: All data containers use TypedDicts with factory functions for code homogeneity
+7. **Discovery-first workflow**: Use discovery functions to understand what data is available before analysis
 
----
+
 
 ## 2. Architecture Overview
 
@@ -155,7 +137,7 @@ def summarize_lmm_result(result: LMMResult) -> str:
     return f"Model for {result['outcome']}: converged={result['converged']}"
 ```
 
----
+
 
 ## 3. Data Flow Pipeline
 
@@ -166,9 +148,26 @@ def summarize_lmm_result(result: LMMResult) -> str:
 from oh_parser import load_profiles
 profiles = load_profiles("/path/to/profiles")
 
+# Step 1b: Discover what data is available (RECOMMENDED)
+from oh_stats import get_profile_summary, discover_sensors, discover_questionnaires
+print(get_profile_summary(profiles))  # Human-readable overview
+sensors = discover_sensors(profiles)  # Dict of sensor -> metrics
+quests = discover_questionnaires(profiles)  # Dict of questionnaire domains
+
 # Step 2: Prepare data for analysis (oh_stats)
+# Option A: Use convenience wrapper for common cases
 from oh_stats import prepare_daily_emg
 ds = prepare_daily_emg(profiles, side="both")
+
+# Option B: Use generic function for any sensor
+from oh_stats import prepare_sensor_data
+ds = prepare_sensor_data(
+    profiles,
+    sensor="heart_rate",
+    base_path="sensor_metrics.heart_rate",
+    level_names=["date"],
+    value_paths=["HR_BPM_stats.*"]
+)
 
 # Step 3: Coverage & missingness report (ALWAYS DO THIS FIRST)
 from oh_stats import summarize_outcomes, check_variance, missingness_report
@@ -273,7 +272,7 @@ subset = subset_dataset(ds, outcomes=["EMG_intensity.mean_percent_mvc"])
 - Enables consistent handling across all analysis functions
 - Dictionary access is explicit and homogeneous with rest of project
 
----
+
 
 ## 4. Module Reference
 
@@ -351,15 +350,41 @@ info = create_outcome_info(
 
 The following EMG outcomes are pre-registered:
 
-| Outcome | Type | Transform | Description | Notes |
-|---------|------|-----------|-------------|-------|
-| `EMG_intensity.mean_percent_mvc` | CONTINUOUS | NONE | Mean muscle activation | Primary |
-| `EMG_intensity.max_percent_mvc` | CONTINUOUS | NONE | Peak activation | |
-| `EMG_intensity.iemg_percent_seconds` | CONTINUOUS | LOG | Integrated EMG | Right-skewed |
-| `EMG_apdf.active.p50` | CONTINUOUS | NONE | Median active amplitude | Primary |
-| `EMG_rest_recovery.rest_percent` | PROPORTION | LOGIT | Time at rest | Bounded [0,1] |
-| `EMG_rest_recovery.gap_count` | COUNT | LOG1P | Number of rest periods | [!] Fallback approach* |
-| ... | ... | ... | ... | |
+| Outcome | Type | Transform | Notes |
+|---------|------|-----------|-------|
+| mean_percent_mvc | CONTINUOUS | NONE | Primary |
+| max_percent_mvc | CONTINUOUS | NONE | |
+| iemg_percent_seconds | CONTINUOUS | LOG | Right-skewed |
+| apdf.active.p50 | CONTINUOUS | NONE | Primary |
+| rest_percent | PROPORTION | LOGIT | Bounded [0,1] |
+| gap_count | COUNT | LOG1P | Fallback* |
+
+**Pre-registered Questionnaire Outcomes (v0.3.0+):**
+
+| Outcome | Type | Transform | Notes |
+|---------|------|-----------|-------|
+| copsoq_quant_demands | CONTINUOUS | NONE | Primary |
+| copsoq_work_pace | CONTINUOUS | NONE | |
+| copsoq_emotional | CONTINUOUS | NONE | |
+| copsoq_influence | CONTINUOUS | NONE | |
+| copsoq_meaning | CONTINUOUS | NONE | |
+| copsoq_social_support | CONTINUOUS | NONE | Primary |
+| mueq_work_station | CONTINUOUS | NONE | |
+| mueq_body_posture | CONTINUOUS | NONE | Primary |
+| mueq_job_control | CONTINUOUS | NONE | |
+| mueq_job_demands | CONTINUOUS | NONE | |
+| mueq_breaks | CONTINUOUS | NONE | |
+| mueq_total | CONTINUOUS | NONE | Primary |
+| rosa_total | ORDINAL | NONE | Primary |
+| ipaq_met_min_week | CONTINUOUS | LOG1P | Right-skewed |
+| ipaq_category | ORDINAL | NONE | |
+| ospaq_sitting_pct | PROPORTION | LOGIT | Bounded [0,1] |
+| ospaq_standing_pct | PROPORTION | LOGIT | Bounded [0,1] |
+| ospaq_walking_pct | PROPORTION | LOGIT | Bounded [0,1] |
+| nprs_pain_current | ORDINAL | NONE | Primary |
+| nprs_pain_average | ORDINAL | NONE | |
+| daily_workload_* | ORDINAL | NONE | |
+| daily_environ_* | CONTINUOUS | NONE | |
 
 > *\*COUNT outcomes: The `LOG1P` transform + Gaussian LMM is a **pragmatic fallback**, not
 > the principled solution. True count data should use Poisson/Negative Binomial GLMMs.
@@ -424,6 +449,18 @@ register_outcome(
 # List all outcomes
 from oh_stats import list_outcomes
 outcomes = list_outcomes(outcome_type=OutcomeType.CONTINUOUS)
+
+# List questionnaire-specific outcomes (v0.3.0+)
+from oh_stats import get_questionnaire_outcomes, get_daily_outcomes, get_single_instance_outcomes
+
+# All questionnaire outcomes (COPSOQ, MUEQ, ROSA, IPAQ, OSPAQ, NPRS, etc.)
+questionnaire_outcomes = get_questionnaire_outcomes()
+
+# Daily repeated measures (workload, pain, environmental)
+daily_outcomes = get_daily_outcomes()
+
+# Single-instance baseline measures (COPSOQ, MUEQ, ROSA, IPAQ, OSPAQ)
+baseline_outcomes = get_single_instance_outcomes()
 ```
 
 #### Why a Registry?
@@ -435,27 +472,191 @@ outcomes = list_outcomes(outcome_type=OutcomeType.CONTINUOUS)
 
 #### Model Family Dispatch Table
 
-| Outcome Type | Preferred Model | Fallback (Current) | Notes |
-|--------------|-----------------|-------------------|-------|
-| **CONTINUOUS** | Gaussian LMM | [OK] Implemented | `statsmodels.MixedLM` |
-| **ORDINAL** | Ordered logistic/probit | [STUB] (future: Bayesian) | Requires specialized tooling |
-| **PROPORTION** | Beta mixed model *or* Logit+LMM | [OK] Logit transform + Gaussian LMM | NOT logistic regression (that's for binary) |
-| **COUNT** | Poisson/Negative Binomial GLMM | [STUB] LOG1P + Gaussian LMM | NB if overdispersed |
-| **BINARY** | Logistic GLMM | [STUB] Stub | True logistic regression |
+| Outcome | Preferred | Current | Notes |
+|---------|-----------|---------|-------|
+| CONTINUOUS | Gaussian LMM | OK | statsmodels |
+| ORDINAL | Ordered logit | STUB | Future |
+| PROPORTION | Beta/Logit+LMM | OK | Not logistic |
+| COUNT | Poisson/NB GLMM | STUB | LOG1P fallback |
+| BINARY | Logistic GLMM | STUB | True logistic |
 
 > **[!] Important Distinction**: "Logistic regression" is for **binary** (0/1) outcomes only.
 > For **proportions** (values in 0-1), we use the **logit transform** on the continuous outcome,
 > then fit a **Gaussian** LMM on the transformed scale. This is statistically defensible and
 > often works well in practice.
 
----
+\newpage
 
 ### 4.2 Data Preparation (prepare.py)
 
 #### Purpose
 Transform raw `oh_parser` output into analysis-ready `AnalysisDataset` dictionaries.
 
-#### Main Functions
+#### Design Philosophy: Generic Data-Type Based Analysis
+
+The `oh_stats` package uses a **generic, data-type based** approach:
+
+- **`oh_parser`** extracts data from any sensor (EMG, heart rate, noise, accelerometer, etc.)
+- **`oh_stats`** analyzes based on **data type** (continuous, ordinal, proportion, count)
+
+This means you don't need sensor-specific functions for each sensor. Instead:
+1. Use **discovery functions** to see what data is available
+2. Use **`prepare_sensor_data()`** (generic) or convenience wrappers for extraction
+3. Use **`register_outcome()`** to specify the data type for statistical analysis
+
+#### Discovery Functions (Start Here!)
+
+Before preparing data, discover what's available in your profiles:
+
+##### `discover_sensors()`
+
+```python
+def discover_sensors(profiles: Dict[str, dict]) -> Dict[str, List[str]]:
+    """
+    Discover available sensors and their metric keys from OH profiles.
+    
+    Parameters
+    ----------
+    profiles : dict
+        Output from oh_parser.load_profiles()
+        
+    Returns
+    -------
+    dict
+        Mapping sensor names to lists of available metric keys
+        
+    Example
+    -------
+    >>> sensors = discover_sensors(profiles)
+    >>> print(sensors)
+    {'heart_rate': ['HR_BPM_stats', 'HR_ratio_stats', ...],
+     'noise': ['Noise_statistics', ...],
+     'emg': ['EMG_intensity', 'EMG_apdf', ...]}
+    """
+```
+
+
+
+##### `discover_questionnaires()`
+
+```python
+def discover_questionnaires(profiles: Dict[str, dict]) -> Dict[str, Dict[str, List[str]]]:
+    """
+    Discover available questionnaire domains and their fields.
+    
+    Parameters
+    ----------
+    profiles : dict
+        Output from oh_parser.load_profiles()
+        
+    Returns
+    -------
+    dict
+        With 'single_instance' and 'daily' keys, each mapping
+        domain names to lists of field names
+        
+    Example
+    -------
+    >>> quests = discover_questionnaires(profiles)
+    >>> print(quests['single_instance'].keys())
+    dict_keys(['personal', 'biomechanical', 'psychosocial', 'environmental'])
+    >>> print(quests['daily'].keys())
+    dict_keys(['workload', 'pain'])
+    """
+```
+
+
+
+##### `get_profile_summary()`
+
+```python
+def get_profile_summary(profiles: Dict[str, dict]) -> str:
+    """
+    Generate a human-readable summary of available data.
+    
+    Example
+    -------
+    >>> print(get_profile_summary(profiles))
+    OH Profile Summary (42 subjects)
+    ==================================================
+    
+    SENSOR DATA:
+      emg: 15 metrics
+      heart_rate: 8 metrics
+      noise: 6 metrics
+    
+    SINGLE-INSTANCE QUESTIONNAIRES:
+      personal: 31 fields
+      biomechanical: 73 fields
+      psychosocial: 4 fields
+    
+    DAILY QUESTIONNAIRES:
+      workload: 6 fields
+      pain: 12 fields
+    """
+```
+
+
+
+#### Generic Sensor Data Preparation
+
+##### `prepare_sensor_data()`
+
+```python
+def prepare_sensor_data(
+    profiles: Dict[str, dict],
+    sensor: str,                         # Sensor name (e.g., "heart_rate")
+    base_path: str,                      # JSON path (e.g., "sensor_metrics.heart_rate")
+    level_names: List[str],              # Nested level names (e.g., ["date"])
+    value_paths: List[str],              # Glob patterns for values
+    level_filter: Optional[Dict[str, str]] = None,  # Filter by level value
+    side: str = "both",                  # Side handling
+    add_day_index: bool = True,
+    add_weekday: bool = True,
+) -> AnalysisDataset:
+    """
+    Generic preparation function for ANY sensor data.
+    
+    This is the core function - modality-specific functions like
+    prepare_daily_emg() are convenience wrappers around this.
+    
+    Example: Prepare heart rate data
+    --------------------------------
+    >>> ds = prepare_sensor_data(
+    ...     profiles,
+    ...     sensor="heart_rate",
+    ...     base_path="sensor_metrics.heart_rate",
+    ...     level_names=["date"],
+    ...     value_paths=["HR_BPM_stats.*", "HR_ratio_stats.*"]
+    ... )
+    
+    Example: Prepare noise data
+    ---------------------------
+    >>> ds = prepare_sensor_data(
+    ...     profiles,
+    ...     sensor="noise",
+    ...     base_path="sensor_metrics.noise",
+    ...     level_names=["date"],
+    ...     value_paths=["Noise_statistics.*"]
+    ... )
+    
+    Example: Prepare environment data
+    ---------------------------------
+    >>> ds = prepare_sensor_data(
+    ...     profiles,
+    ...     sensor="environment",
+    ...     base_path="sensor_metrics.environment",
+    ...     level_names=["date"],
+    ...     value_paths=["*"]
+    ... )
+    """
+```
+
+
+
+#### EMG Convenience Wrappers
+
+For EMG data (the most common use case), convenience wrappers are provided:
 
 ##### `prepare_daily_emg()`
 
@@ -552,7 +753,7 @@ result = fit_lmm(
 **Example:**
 
 ```python
-# Keep both sides (320 obs = 160 days × 2 sides)
+# Keep both sides (320 obs = 160 days x 2 sides)
 ds_both = prepare_daily_emg(profiles, side="both")
 print(ds_both['data'].shape)  # (320, 27)
 
@@ -560,6 +761,8 @@ print(ds_both['data'].shape)  # (320, 27)
 ds_avg = prepare_daily_emg(profiles, side="average")
 print(ds_avg['data'].shape)  # (160, 25)
 ```
+
+
 
 ##### `create_analysis_dataset()`
 
@@ -579,25 +782,32 @@ def create_analysis_dataset(
     """Create an AnalysisDataset TypedDict."""
 ```
 
+
+
 ##### Helper Functions
 
+**`describe_dataset()`** - Get summary statistics for an AnalysisDataset.
+
 ```python
-# Describe a dataset
 def describe_dataset(ds: AnalysisDataset) -> Dict[str, Any]:
     """Get summary statistics for an AnalysisDataset."""
+```
 
-# Subset a dataset
+**`subset_dataset()`** - Subset an AnalysisDataset by outcomes, subjects, or time range.
+
+```python
 def subset_dataset(
     ds: AnalysisDataset,
     outcomes: Optional[List[str]] = None,
     subjects: Optional[List[str]] = None,
     time_range: Optional[Tuple[int, int]] = None
 ) -> AnalysisDataset:
-    """Subset an AnalysisDataset by outcomes, subjects, or time range."""
+```
 
-# Validate a dataset
+**`validate_dataset()`** - Validate an AnalysisDataset structure. Returns list of warnings.
+
+```python
 def validate_dataset(ds: AnalysisDataset) -> List[str]:
-    """Validate an AnalysisDataset structure. Returns list of warnings."""
 ```
 
 ##### Day Index Computation
@@ -622,7 +832,7 @@ Subject 104:
 - Interest is in "day 1 vs day 5 of monitoring," not "October 13 vs October 17"
 - Makes between-subject comparison meaningful
 
----
+\newpage
 
 ### 4.3 Descriptive Statistics (descriptive.py)
 
@@ -683,6 +893,8 @@ EMG_intensity.mean_percent_mvc 320          0   9.126   6.992  1.080  4.424   7.
            EMG_apdf.active.p50 320          0   6.811   5.901  0.696  3.015   5.378
 ```
 
+
+
 ##### `check_normality()`
 
 ```python
@@ -715,6 +927,8 @@ def check_normality(
 > 3. Check whether fixed-effect estimates are **stable** under transformation
 > 4. LMMs are fairly robust to mild normality violations
 
+
+
 ##### `check_variance()`
 
 ```python
@@ -735,7 +949,7 @@ def check_variance(
     """
 ```
 
----
+\newpage
 
 ### 4.4 Linear Mixed Models (lmm.py)
 
@@ -745,7 +959,7 @@ Fit Linear Mixed Effects Models accounting for repeated measures within subjects
 #### Why Linear Mixed Models?
 
 **The Problem:**
-Each subject provides multiple observations (days). These observations are **not independent**—values from the same subject are more similar than values from different subjects.
+Each subject provides multiple observations (days). These observations are **not independent** - values from the same subject are more similar than values from different subjects.
 
 **Standard approaches fail:**
 - **T-tests/ANOVA**: Assume independence -> inflated Type I error
@@ -863,6 +1077,104 @@ def fit_lmm(
     """
 ```
 
+
+
+##### `prepare_baseline_questionnaires()` (v0.3.0+)
+
+```python
+def prepare_baseline_questionnaires(
+    profiles: Dict[str, dict],
+    questionnaire_type: str = "all",   # "copsoq", "mueq", "rosa", "ipaq", "ospaq", or "all"
+    compute_composites: bool = True,    # Auto-compute dimension scores
+) -> AnalysisDataset:
+    """
+    Prepare single-instance baseline questionnaire data.
+    
+    These questionnaires are administered once per subject:
+    - COPSOQ: Copenhagen Psychosocial Questionnaire (work stress)
+    - MUEQ: Musculoskeletal-Utrecht Ergonomic Questionnaire
+    - ROSA: Rapid Office Strain Assessment (1-10)
+    - IPAQ: International Physical Activity Questionnaire
+    - OSPAQ: Occupational Sitting and Physical Activity Questionnaire
+    """
+```
+
+
+
+##### `prepare_daily_workload()` (v0.3.0+)
+
+```python
+def prepare_daily_workload(
+    profiles: Dict[str, dict],
+    aggregate_to_composite: bool = True,  # Create composite workload score
+) -> AnalysisDataset:
+    """
+    Prepare daily workload Likert items (repeated measures).
+    
+    Items are rated 1-5 daily, covering:
+    - Physical demands
+    - Mental demands  
+    - Time pressure
+    - Work interruptions
+    """
+```
+
+
+
+##### `prepare_daily_pain()` (v0.3.0+)
+
+```python
+def prepare_daily_pain(
+    profiles: Dict[str, dict],
+    body_regions: Optional[List[str]] = None,  # Filter specific regions
+) -> AnalysisDataset:
+    """
+    Prepare daily NPRS pain ratings (0-10 scale).
+    
+    Tracks pain by body region over time.
+    """
+```
+
+
+
+##### `compute_composite_score()` (v0.3.0+)
+
+```python
+def compute_composite_score(
+    df: pd.DataFrame,
+    items: List[str],
+    reverse_items: Optional[List[str]] = None,
+    scale_max: int = 5,
+    missing_rule: str = "half",  # "half", "any", "none"
+    output_scale: Tuple[int, int] = (0, 100),
+) -> pd.Series:
+    """
+    Compute composite scores from Likert items.
+    
+    Features:
+    - Automatic reverse coding for negatively-worded items
+    - Configurable missing data rules
+    - Rescaling to 0-100 standard
+    """
+```
+
+
+
+##### `align_sensor_questionnaire()` (v0.3.0+)
+
+```python
+def align_sensor_questionnaire(
+    sensor_ds: AnalysisDataset,
+    questionnaire_ds: AnalysisDataset,
+    join_on: List[str] = ["subject_id", "date"],
+) -> AnalysisDataset:
+    """
+    Merge sensor data (EMG) with questionnaire data.
+    
+    Enables multi-modal analysis: "Does perceived workload predict EMG?"
+    """
+```
+
 **Day as Categorical vs. Linear:**
 
 ```python
@@ -879,6 +1191,8 @@ def fit_lmm(
 result_cat = fit_lmm(ds, outcome, day_as_categorical=True)
 result_lin = fit_lmm(ds, outcome, day_as_categorical=False)
 ```
+
+
 
 ##### `fit_all_outcomes()`
 
@@ -901,9 +1215,12 @@ def fit_all_outcomes(
     """
 ```
 
+\newpage
+
 #### Understanding the Output
 
 **Coefficients DataFrame:**
+
 ```
              term  estimate  std_error   z_value   p_value  ci_lower  ci_upper
 C(day_index)[T.2] -0.411170   0.825203 -0.498265  0.618297 -2.028538  1.206198
@@ -936,10 +1253,11 @@ ICC = sigma^2_u / (sigma^2_u + sigma^2)
 ```
 
 **Interpretation:**
-- ICC = 0.50 means **50% of total variance is between subjects**
-- This justifies using mixed models—observations within subjects are indeed correlated
 
----
+- ICC = 0.50 means **50% of total variance is between subjects**
+- This justifies using mixed models - observations within subjects are indeed correlated
+
+\newpage
 
 ### 4.5 Post-Hoc Comparisons (posthoc.py)
 
@@ -998,6 +1316,8 @@ def pairwise_contrasts(
     """
 ```
 
+
+
 ##### `compute_emmeans()`
 
 ```python
@@ -1013,6 +1333,8 @@ def compute_emmeans(
     averaging over other factors.
     """
 ```
+
+
 
 ##### `compute_effect_size()`
 
@@ -1063,7 +1385,7 @@ repeated-measures designs where subject-level variance is nuisance.
 > primary result. Cohen's d is supplementary for readers who want standardized comparisons
 > across studies.
 
----
+\newpage
 
 ### 4.6 Multiplicity Correction (multiplicity.py)
 
@@ -1135,6 +1457,8 @@ def apply_fdr(
     """
 ```
 
+
+
 ##### `apply_holm()`
 
 ```python
@@ -1147,6 +1471,8 @@ def apply_holm(
     More powerful than Bonferroni while controlling FWER.
     """
 ```
+
+
 
 ##### `adjust_pvalues()`
 
@@ -1167,7 +1493,7 @@ def adjust_pvalues(
     """
 ```
 
----
+\newpage
 
 ### 4.7 Model Diagnostics (diagnostics.py)
 
@@ -1243,6 +1569,8 @@ def residual_diagnostics(result: LMMResult) -> DiagnosticsResult:
 >
 > The same "signal, not verdict" philosophy from normality testing applies here.
 
+
+
 ##### `check_assumptions()`
 
 ```python
@@ -1290,7 +1618,7 @@ if diag['n_outliers'] > 0:
     print(f"[WARNING] {diag['n_outliers']} potential outliers - investigate these")
 ```
 
----
+\newpage
 
 ### 4.8 Report Generation (report.py)
 
@@ -1316,6 +1644,8 @@ def descriptive_table(
     """
 ```
 
+
+
 ##### `coefficient_table()`
 
 ```python
@@ -1331,6 +1661,8 @@ def coefficient_table(
         | Term | Estimate (95% CI) | SE | p-value |
     """
 ```
+
+
 
 ##### `results_summary()`
 
@@ -1388,11 +1720,172 @@ For OH/biomedical papers, report:
 2. **Marginal R²**: Shows practical effect of predictors
 3. Raw variance components (sigma^2_u, sigma^2_residual) for reproducibility
 
----
+\newpage
 
-## 5. Statistical Methods Deep Dive
+## 5. Questionnaire Data Support
 
-### 5.1 Linear Mixed Models: Mathematical Foundation
+### 5.1 Overview
+
+Version 0.3.0 adds comprehensive support for questionnaire data commonly used in occupational health research. The package handles:
+
+| Questionnaire | Type | Items | Measurement | Frequency |
+|---------------|------|-------|-------------|------------|
+| **COPSOQ** | Psychosocial | 23 dimensions | 1-5 Likert -> 0-100 | Baseline |
+| **MUEQ** | Ergonomic risk | 6 domains | 1-5 Likert -> 0-100 | Baseline |
+| **ROSA** | Office strain | 1 total | 1-10 ordinal | Baseline |
+| **IPAQ** | Physical activity | MET-min/week | Continuous | Baseline |
+| **OSPAQ** | Occupational sitting | % time | Proportions | Baseline |
+| **NPRS** | Pain rating | 0-10 per region | Ordinal | Daily |
+| **Workload** | Daily demands | 4-8 items | 1-5 Likert | Daily |
+
+### 5.2 Statistical Considerations by Questionnaire Type
+
+#### COPSOQ/MUEQ Dimension Scores (Continuous)
+
+Dimension scores are computed as mean of constituent items, rescaled 0-100:
+
+```python
+from oh_stats import compute_composite_score
+
+# Example: COPSOQ Quantitative Demands (3 items)
+df['copsoq_quant_demands'] = compute_composite_score(
+    df,
+    items=['copsoq_q1', 'copsoq_q2', 'copsoq_q3'],
+    reverse_items=['copsoq_q2'],  # Item 2 is reverse-coded
+    scale_max=5,
+    output_scale=(0, 100)
+)
+```
+
+**Statistical treatment:**
+- `OutcomeType.CONTINUOUS` with `TransformType.NONE`
+- Standard Gaussian LMM applies
+- Check for ceiling/floor effects in descriptives
+
+#### ROSA Score (Ordinal, 1-10)
+
+```python
+# ROSA is a single ordinal score
+# Current approach: Treat as continuous in LMM (common practice)
+# Future: Ordinal mixed model
+
+result = fit_lmm(ds, 'rosa_total')  # Works, but interpret with care
+```
+
+**Statistical treatment:**
+- `OutcomeType.ORDINAL` with `TransformType.NONE`
+- Gaussian LMM is pragmatic fallback (10-point scale often treated as interval)
+- Future: Cumulative link mixed models (CLMMs)
+
+#### IPAQ MET-minutes/week (Right-Skewed Continuous)
+
+```python
+# IPAQ data is highly right-skewed with possible zeros
+# Registry recommends LOG1P transform
+
+from oh_stats import fit_lmm, TransformType
+result = fit_lmm(ds, 'ipaq_total_met_min_week', transform=TransformType.LOG1P)
+```
+
+**Statistical treatment:**
+- `OutcomeType.CONTINUOUS` with `TransformType.LOG1P`
+- Back-transform coefficients for interpretation
+- Consider categorized IPAQ (low/moderate/high) for robustness check
+
+#### OSPAQ Percentages (Proportions)
+
+```python
+# OSPAQ: % time sitting/standing/walking (compositional data)
+# Must convert 0-100% to 0-1 proportions
+# LOGIT transform handles bounded nature
+
+result = fit_lmm(ds, 'ospaq_sitting_pct')  # Auto-applies LOGIT
+```
+
+**Statistical treatment:**
+- `OutcomeType.PROPORTION` with `TransformType.LOGIT`
+- Epsilon clamping (1e-6) handles 0% and 100% values
+- Note: Three OSPAQ components sum to ~100%, creating compositional dependency
+  - Analyze one at a time, or use compositional data analysis
+
+#### NPRS Pain (Ordinal, 0-10, Daily Repeated)
+
+```python
+# Daily pain ratings are ordinal with many zeros (no pain)
+# High zero-inflation is common
+
+from oh_stats import prepare_daily_pain
+
+pain_ds = prepare_daily_pain(profiles, body_regions=['neck', 'shoulder'])
+result = fit_lmm(pain_ds, 'nprs_neck')
+```
+
+**Statistical treatment:**
+- `OutcomeType.ORDINAL` with `TransformType.NONE`
+- Consider: Binary analysis (pain yes/no) as sensitivity check
+- Future: Zero-inflated ordinal models
+
+### 5.3 Multi-Modal Analysis: Combining Sensors and Questionnaires
+
+A key research question is linking subjective reports to objective measurements:
+
+```python
+from oh_parser import load_profiles
+from oh_stats import (
+    prepare_daily_emg,
+    prepare_daily_workload,
+    align_sensor_questionnaire,
+    fit_lmm
+)
+
+# Load profiles
+profiles = load_profiles("/path/to/profiles")
+
+# Prepare EMG data
+emg_ds = prepare_daily_emg(profiles, side="average")
+
+# Prepare daily workload
+workload_ds = prepare_daily_workload(profiles)
+
+# Merge on subject x date
+merged_ds = align_sensor_questionnaire(emg_ds, workload_ds)
+
+# Now can model: Does perceived workload predict EMG intensity?
+# Formula: EMG_intensity ~ workload_composite + (1|subject_id)
+result = fit_lmm(
+    merged_ds, 
+    outcome='EMG_intensity.mean_percent_mvc',
+    fixed_effects=['workload_composite'],
+    day_as_categorical=False  # workload as continuous predictor
+)
+```
+
+### 5.4 Baseline Questionnaires as Covariates
+
+Single-instance questionnaires can be used as subject-level covariates:
+
+```python
+from oh_stats import prepare_baseline_questionnaires, prepare_daily_emg
+
+# Prepare baseline data
+baseline_ds = prepare_baseline_questionnaires(profiles, questionnaire_type="copsoq")
+emg_ds = prepare_daily_emg(profiles, side="both")
+
+# Merge baseline covariates into EMG data
+merged = emg_ds['data'].merge(
+    baseline_ds['data'][['subject_id', 'copsoq_quantitative_demands']],
+    on='subject_id'
+)
+
+# Research question: Do workers with higher psychosocial demands
+# show different EMG patterns?
+```
+
+\newpage
+
+## 6. Statistical Methods Deep Dive
+
+### 6.1 Linear Mixed Models: Mathematical Foundation
 
 #### The Model
 
@@ -1417,7 +1910,7 @@ $$Y_{ij} = \beta_0 + \beta_1 \text{Day}_{ij} + \beta_2 \text{Side}_{ij} + u_i + 
 - Var(e_ij) = sigma^2 (within-subject variance)
 - Cov(Y_ij, Y_ik) = sigma^2_u for same subject (compound symmetry)
 
-### 5.2 Variance Transforms
+### 6.2 Variance Transforms
 
 #### Transform Reference
 
@@ -1429,7 +1922,7 @@ $$Y_{ij} = \beta_0 + \beta_1 \text{Day}_{ij} + \beta_2 \text{Side}_{ij} + u_i + 
 | LOGIT | $\log\frac{Y}{1-Y}$ | Y in (0,1), proportions | [OK] **Preferred** |
 | ARCSINE | $\arcsin(\sqrt{Y})$ | Legacy only | [X] **Deprecated** |
 
-### 5.3 Multiple Testing Correction
+### 6.3 Multiple Testing Correction
 
 #### FDR (False Discovery Rate)
 
@@ -1447,11 +1940,11 @@ $$\text{FDR} = E\left[\frac{V}{R}\right]$$
 2. Compare p_(i) to alpha / (m - i + 1)
 3. Reject until first non-rejection, then stop
 
----
+\newpage
 
-## 6. Complete Workflow Examples
+## 7. Complete Workflow Examples
 
-### 6.1 Basic Analysis: Day Effect on EMG Intensity
+### 7.1 Basic Analysis: Day Effect on EMG Intensity
 
 ```python
 """
@@ -1505,7 +1998,7 @@ contrasts = pairwise_contrasts(result, "day_index", ds)
 print(contrasts[["contrast", "estimate", "p_adjusted", "cohens_d"]])
 ```
 
-### 6.2 Multi-Outcome Analysis with FDR Correction
+### 7.2 Multi-Outcome Analysis with FDR Correction
 
 ```python
 """
@@ -1551,11 +2044,65 @@ print("\n=== Complete Summary ===")
 print(summary)
 ```
 
----
+### 7.3 Questionnaire Analysis Workflow (v0.3.0+)
 
-## 7. Edge Cases and Error Handling
+```python
+"""
+Research Question: Do COPSOQ psychosocial factors relate to EMG activity?
+"""
 
-### 7.1 Missing Data
+from oh_parser import load_profiles
+from oh_stats import (
+    prepare_daily_emg,
+    prepare_baseline_questionnaires,
+    prepare_daily_pain,
+    align_sensor_questionnaire,
+    get_questionnaire_outcomes,
+    fit_lmm,
+    apply_fdr,
+    summarize_outcomes,
+)
+
+# Load profiles
+profiles = load_profiles("E:/OH_profiles")
+
+# Step 1: Prepare questionnaire data
+baseline_ds = prepare_baseline_questionnaires(profiles, questionnaire_type="copsoq")
+pain_ds = prepare_daily_pain(profiles)
+
+# Step 2: Prepare EMG data
+emg_ds = prepare_daily_emg(profiles, side="average")
+
+# Step 3: Describe questionnaire distributions
+print("=== COPSOQ Baseline Summary ===")
+print(summarize_outcomes(baseline_ds))
+
+print("\n=== Daily Pain Summary ===")
+print(summarize_outcomes(pain_ds))
+
+# Step 4: Merge sensor + questionnaire for multi-modal analysis
+merged_ds = align_sensor_questionnaire(emg_ds, pain_ds)
+
+# Step 5: Model pain as function of day (trajectory analysis)
+pain_result = fit_lmm(pain_ds, 'nprs_neck')
+print(f"\nNeck pain trajectory: p = {pain_result['fit_stats']['lrt_pvalue']:.4f}")
+
+# Step 6: Model EMG controlling for daily pain
+# (Add pain as time-varying covariate)
+print("\n=== EMG with Pain Covariate ===")
+emg_pain_result = fit_lmm(
+    merged_ds,
+    outcome='EMG_intensity.mean_percent_mvc',
+    fixed_effects=['day_index', 'nprs_neck'],
+    day_as_categorical=False
+)
+```
+
+\newpage
+
+## 8. Edge Cases and Error Handling
+
+### 8.1 Missing Data
 
 ```python
 # Check missingness before modeling
@@ -1567,7 +2114,7 @@ if miss['pct_missing'].iloc[0] > 10:
     print("Warning: High missingness - check if MAR is plausible")
 ```
 
-### 7.2 Non-Convergence
+### 8.2 Non-Convergence
 
 ```python
 result = fit_lmm(ds, outcome)
@@ -1583,7 +2130,7 @@ if not result['converged']:
     result_log = fit_lmm(ds, outcome, transform=TransformType.LOG)
 ```
 
-### 7.3 Degenerate Outcomes
+### 8.3 Degenerate Outcomes
 
 ```python
 variance_check = check_variance(ds, [outcome])
@@ -1592,7 +2139,7 @@ if variance_check['is_degenerate'].iloc[0]:
     print("This outcome cannot be meaningfully modeled.")
 ```
 
-### 7.4 Small Sample Sizes
+### 8.4 Small Sample Sizes
 
 ```python
 result = fit_lmm(ds, outcome)
@@ -1618,11 +2165,11 @@ if result['n_groups'] < 30:
 >
 > There is no magic threshold - use judgment based on design complexity.
 
----
+\newpage
 
-## 8. Best Practices
+## 9. Best Practices
 
-### 8.1 Pre-Analysis Checklist
+### 9.1 Pre-Analysis Checklist
 
 1. **Check data quality**
    - Run `missingness_report()`
@@ -1638,7 +2185,7 @@ if result['n_groups'] < 30:
    - Pre-specify alpha level and correction method
    - Justify model specification
 
-### 8.2 Working with TypedDicts
+### 9.2 Working with TypedDicts
 
 ```python
 # Access data using dictionary syntax
@@ -1656,14 +2203,14 @@ ds = create_analysis_dataset(data=df, outcome_vars=outcomes, ...)
 result = create_lmm_result(outcome=name, model=model, ...)
 ```
 
-### 8.3 Reporting Results
+### 9.3 Reporting Results
 
 **Example results paragraph:**
 > "EMG mean %MVC was analyzed using linear mixed models with subjects as random intercepts, day (categorical) and side as fixed effects. The ICC was 0.50, indicating substantial between-subject variation. After FDR correction (alpha = 0.05), day showed a significant overall association with mean %MVC (p_adj = 0.03). Post-hoc contrasts (Holm-adjusted) revealed significantly lower activation on Day 4 compared to Day 1 (Delta = -1.93 %MVC, 95% CI [-3.58, -0.28], Cohen's d = 0.28, p_adj = 0.04)."
 
----
+\newpage
 
-## 9. Glossary
+## 10. Glossary
 
 | Term | Definition |
 |------|------------|
@@ -1672,13 +2219,23 @@ result = create_lmm_result(outcome=name, model=model, ...)
 | **Cohen's d** | Standardized effect size: (M1 - M2) / SD_pooled. |
 | **ContrastResult** | TypedDict for post-hoc comparison output. |
 | **DiagnosticsResult** | TypedDict for model diagnostics output. |
+| **discover_sensors()** | Function to find available sensors and metrics in profiles. |
+| **discover_questionnaires()** | Function to find available questionnaire domains and fields. |
 | **FDR** | False Discovery Rate. Expected proportion of false positives. |
+| **get_profile_summary()** | Function to generate human-readable data overview. |
 | **ICC** | Intraclass Correlation. Between-subject variance proportion. |
 | **LMMResult** | TypedDict for linear mixed model output. |
 | **OutcomeInfo** | TypedDict for outcome variable metadata. |
+| **prepare_sensor_data()** | Generic function to prepare ANY sensor data for analysis. |
 | **TypedDict** | Python dict with type hints (function-based alternative to dataclass). |
+| **COPSOQ** | Copenhagen Psychosocial Questionnaire (work stress dimensions). |
+| **MUEQ** | Musculoskeletal-Utrecht Ergonomic Questionnaire. |
+| **ROSA** | Rapid Office Strain Assessment (1-10 score). |
+| **IPAQ** | International Physical Activity Questionnaire (MET-min/week). |
+| **OSPAQ** | Occupational Sitting and Physical Activity Questionnaire. |
+| **NPRS** | Numeric Pain Rating Scale (0-10). |
 
----
+
 
 ## Quick Reference Card
 
@@ -1687,40 +2244,116 @@ result = create_lmm_result(outcome=name, model=model, ...)
 
 from oh_parser import load_profiles
 from oh_stats import (
+    # Discovery
+    get_profile_summary,
+    discover_sensors,
+    discover_questionnaires,
+    # Preparation
+    prepare_sensor_data,
     prepare_daily_emg,
+    # Analysis
     summarize_outcomes,
     fit_all_outcomes,
     apply_fdr,
     results_summary,
 )
 
-# 1. Load & Prepare
+# 1. Load & Discover
 profiles = load_profiles("/path/to/data")
+print(get_profile_summary(profiles))  # See what's available
+
+# 2. Prepare (choose your approach)
+# Option A: EMG convenience wrapper
 ds = prepare_daily_emg(profiles, side="both")
 
-# 2. Describe
+# Option B: Generic for any sensor
+ds = prepare_sensor_data(
+    profiles,
+    sensor="heart_rate",
+    base_path="sensor_metrics.heart_rate",
+    level_names=["date"],
+    value_paths=["HR_BPM_stats.*"]
+)
+
+# 3. Describe
 summary = summarize_outcomes(ds)
 print(summary)
 
-# 3. Model
+# 4. Model
 results = fit_all_outcomes(ds, skip_degenerate=True)
 
-# 4. Correct
+# 5. Correct
 fdr = apply_fdr(results)
 print(fdr[fdr['significant']])
 
-# 5. Report
+# 6. Report
 report = results_summary(results, fdr)
 print(report)
 ```
 
----
+\newpage
 
-## 10. Future Extensions: Multi-Modal Ready
+## 11. Architecture: Generic Data-Type Based Analysis
 
-The `oh_stats` architecture is designed to generalize beyond EMG.
+The `oh_stats` architecture uses a **generic, data-type based** approach that cleanly separates
+data extraction from statistical analysis:
 
-### Planned Extensions
+### Separation of Concerns
+
+| Layer | Package | Responsibility |
+|-------|---------|----------------|
+| **Extraction** | `oh_parser` | Extract data from ANY sensor using `extract_nested()`, `extract_flat()` |
+| **Discovery** | `oh_stats` | Inspect profiles to see what data is available |
+| **Preparation** | `oh_stats` | Transform extracted data into `AnalysisDataset` format |
+| **Analysis** | `oh_stats` | Statistical analysis based on **data type** (continuous, ordinal, etc.) |
+
+### Why Generic?
+
+1. **New sensors don't require new functions**: Add heart rate? Just use `prepare_sensor_data()` with appropriate paths
+2. **Consistent API**: Same workflow for EMG, heart rate, noise, accelerometer, etc.
+3. **Data type drives analysis**: A continuous metric from EMG uses the same statistical model as a continuous metric from heart rate
+4. **Registry for customization**: Use `register_outcome()` to specify data type and transform for any new metric
+
+### Example: Analyzing a New Sensor
+
+```python
+from oh_parser import load_profiles
+from oh_stats import (
+    discover_sensors,
+    prepare_sensor_data,
+    register_outcome,
+    OutcomeType,
+    TransformType,
+    fit_lmm
+)
+
+# 1. Load and discover
+profiles = load_profiles("/path/to/data")
+sensors = discover_sensors(profiles)
+print(sensors['heart_rate'])  # See what metrics are available
+
+# 2. Prepare data (generic function works for any sensor)
+ds = prepare_sensor_data(
+    profiles,
+    sensor="heart_rate",
+    base_path="sensor_metrics.heart_rate",
+    level_names=["date"],
+    value_paths=["HR_BPM_stats.*"]
+)
+
+# 3. Register outcome type (tells oh_stats how to analyze it)
+register_outcome(
+    name="HR_BPM_stats.mean",
+    outcome_type=OutcomeType.CONTINUOUS,
+    transform=TransformType.NONE,
+    description="Mean heart rate in BPM"
+)
+
+# 4. Analyze using the same LMM as any continuous outcome
+result = fit_lmm(ds, "HR_BPM_stats.mean")
+```
+
+### Future Extensions
 
 | Feature | Current Status | Future Direction |
 |---------|----------------|------------------|
@@ -1737,7 +2370,7 @@ The `oh_stats` architecture is designed to generalize beyond EMG.
 - Warton & Hui (2011): The arcsine is asinine. *Ecology* 92(1):3-10
 - Nakagawa & Schielzeth (2013): A general and simple method for obtaining R² from GLMMs. *Methods Ecol Evol* 4(2):133-142
 
----
+
 
 *Document generated for oh_stats v0.3.0*
 *Last updated: January 2026*

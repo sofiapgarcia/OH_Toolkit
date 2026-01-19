@@ -350,8 +350,276 @@ _DEFAULT_EMG_OUTCOMES: Dict[str, OutcomeInfo] = {
 }
 
 
+# =============================================================================
+# DEFAULT QUESTIONNAIRE OUTCOMES
+# =============================================================================
+
+_DEFAULT_QUESTIONNAIRE_OUTCOMES: Dict[str, OutcomeInfo] = {
+    # --- COPSOQ II Dimension Scores (0-100, treat as continuous) ---
+    "copsoq.Exigências Quantitativas": create_outcome_info(
+        name="copsoq.Exigências Quantitativas",
+        outcome_type=OutcomeType.CONTINUOUS,
+        level=AnalysisLevel.SINGLE,
+        transform=TransformType.NONE,
+        description="COPSOQ: Quantitative demands",
+        unit="score 0-100",
+        valid_range=(0, 100),
+        is_primary=False,
+        sensor="questionnaire",
+    ),
+    "copsoq.Ritmo de Trabalho": create_outcome_info(
+        name="copsoq.Ritmo de Trabalho",
+        outcome_type=OutcomeType.CONTINUOUS,
+        level=AnalysisLevel.SINGLE,
+        transform=TransformType.NONE,
+        description="COPSOQ: Work pace",
+        unit="score 0-100",
+        valid_range=(0, 100),
+        is_primary=False,
+        sensor="questionnaire",
+    ),
+    "copsoq.Burnout": create_outcome_info(
+        name="copsoq.Burnout",
+        outcome_type=OutcomeType.CONTINUOUS,
+        level=AnalysisLevel.SINGLE,
+        transform=TransformType.NONE,
+        description="COPSOQ: Burnout",
+        unit="score 0-100",
+        valid_range=(0, 100),
+        is_primary=True,
+        sensor="questionnaire",
+    ),
+    "copsoq.Stress": create_outcome_info(
+        name="copsoq.Stress",
+        outcome_type=OutcomeType.CONTINUOUS,
+        level=AnalysisLevel.SINGLE,
+        transform=TransformType.NONE,
+        description="COPSOQ: Stress",
+        unit="score 0-100",
+        valid_range=(0, 100),
+        is_primary=True,
+        sensor="questionnaire",
+    ),
+    "copsoq.Satisfação Laboral": create_outcome_info(
+        name="copsoq.Satisfação Laboral",
+        outcome_type=OutcomeType.CONTINUOUS,
+        level=AnalysisLevel.SINGLE,
+        transform=TransformType.NONE,
+        description="COPSOQ: Job satisfaction",
+        unit="score 0-100",
+        valid_range=(0, 100),
+        is_primary=False,
+        sensor="questionnaire",
+    ),
+    
+    # --- MUEQ Domain Scores (continuous by aggregation) ---
+    "mueq.Autonomia": create_outcome_info(
+        name="mueq.Autonomia",
+        outcome_type=OutcomeType.CONTINUOUS,
+        level=AnalysisLevel.SINGLE,
+        transform=TransformType.NONE,
+        description="MUEQ: Autonomy",
+        unit="score 0-1",
+        valid_range=(0, 1),
+        is_primary=False,
+        sensor="questionnaire",
+    ),
+    "mueq.Qualidade das Pausas": create_outcome_info(
+        name="mueq.Qualidade das Pausas",
+        outcome_type=OutcomeType.CONTINUOUS,
+        level=AnalysisLevel.SINGLE,
+        transform=TransformType.NONE,
+        description="MUEQ: Break quality",
+        unit="score 0-1",
+        valid_range=(0, 1),
+        is_primary=False,
+        sensor="questionnaire",
+    ),
+    
+    # --- ROSA (Rapid Office Strain Assessment) ---
+    "ROSA_final": create_outcome_info(
+        name="ROSA_final",
+        outcome_type=OutcomeType.ORDINAL,  # Discrete 1-10, quasi-continuous
+        level=AnalysisLevel.SINGLE,
+        transform=TransformType.NONE,
+        description="ROSA: Final ergonomic risk score",
+        unit="score 1-10",
+        valid_range=(1, 10),
+        is_primary=True,
+        sensor="questionnaire",
+    ),
+    "ROSA_final_normalized": create_outcome_info(
+        name="ROSA_final_normalized",
+        outcome_type=OutcomeType.PROPORTION,
+        level=AnalysisLevel.SINGLE,
+        transform=TransformType.LOGIT,
+        description="ROSA: Normalized final score",
+        unit="proportion 0-1",
+        valid_range=(0, 1),
+        is_primary=False,
+        sensor="questionnaire",
+    ),
+    
+    # --- IPAQ-SF (Physical Activity) ---
+    "ipaq.total_met": create_outcome_info(
+        name="ipaq.total_met",
+        outcome_type=OutcomeType.CONTINUOUS,
+        level=AnalysisLevel.SINGLE,
+        transform=TransformType.LOG1P,  # Highly skewed
+        description="IPAQ: Total MET-minutes/week",
+        unit="MET-min/week",
+        valid_range=(0, None),
+        is_primary=False,
+        sensor="questionnaire",
+    ),
+    "ipaq.category": create_outcome_info(
+        name="ipaq.category",
+        outcome_type=OutcomeType.ORDINAL,  # Low/Moderate/High
+        level=AnalysisLevel.SINGLE,
+        transform=TransformType.NONE,
+        description="IPAQ: Activity category",
+        unit="category",
+        valid_range=None,
+        is_primary=False,
+        sensor="questionnaire",
+    ),
+    
+    # --- OSPAQ (Occupational Sitting and Physical Activity) ---
+    "ospaq.percentagem_sentado": create_outcome_info(
+        name="ospaq.percentagem_sentado",
+        outcome_type=OutcomeType.PROPORTION,
+        level=AnalysisLevel.SINGLE,
+        transform=TransformType.LOGIT,  # Compositional, but analyzed separately
+        description="OSPAQ: Percentage of time sitting",
+        unit="proportion 0-1",
+        valid_range=(0, 100),  # Stored as percentage, convert to 0-1
+        is_primary=False,
+        sensor="questionnaire",
+    ),
+    "ospaq.percentagem_pe": create_outcome_info(
+        name="ospaq.percentagem_pe",
+        outcome_type=OutcomeType.PROPORTION,
+        level=AnalysisLevel.SINGLE,
+        transform=TransformType.LOGIT,
+        description="OSPAQ: Percentage of time standing",
+        unit="proportion 0-1",
+        valid_range=(0, 100),
+        is_primary=False,
+        sensor="questionnaire",
+    ),
+    "ospaq.percentagem_caminhar": create_outcome_info(
+        name="ospaq.percentagem_caminhar",
+        outcome_type=OutcomeType.PROPORTION,
+        level=AnalysisLevel.SINGLE,
+        transform=TransformType.LOGIT,
+        description="OSPAQ: Percentage of time walking",
+        unit="proportion 0-1",
+        valid_range=(0, 100),
+        is_primary=False,
+        sensor="questionnaire",
+    ),
+    
+    # --- Pain (NPRS 0-10) ---
+    "pain.intensity": create_outcome_info(
+        name="pain.intensity",
+        outcome_type=OutcomeType.ORDINAL,  # 0-10 scale, often treated as continuous
+        level=AnalysisLevel.DAILY,
+        transform=TransformType.NONE,
+        description="NPRS: Pain intensity",
+        unit="score 0-10",
+        valid_range=(0, 10),
+        is_primary=True,
+        sensor="questionnaire",
+    ),
+    
+    # --- Daily Workload Questionnaire (Likert 1-5) ---
+    "workload.focus_and_mental_strain": create_outcome_info(
+        name="workload.focus_and_mental_strain",
+        outcome_type=OutcomeType.ORDINAL,
+        level=AnalysisLevel.DAILY,
+        transform=TransformType.NONE,
+        description="Daily workload: Focus and mental strain",
+        unit="Likert 1-5",
+        valid_range=(1, 5),
+        is_primary=False,
+        sensor="questionnaire",
+    ),
+    "workload.rushed_and_under_pressure": create_outcome_info(
+        name="workload.rushed_and_under_pressure",
+        outcome_type=OutcomeType.ORDINAL,
+        level=AnalysisLevel.DAILY,
+        transform=TransformType.NONE,
+        description="Daily workload: Rushed and under pressure",
+        unit="Likert 1-5",
+        valid_range=(1, 5),
+        is_primary=False,
+        sensor="questionnaire",
+    ),
+    "workload.frequent_interruptions": create_outcome_info(
+        name="workload.frequent_interruptions",
+        outcome_type=OutcomeType.ORDINAL,
+        level=AnalysisLevel.DAILY,
+        transform=TransformType.NONE,
+        description="Daily workload: Frequent interruptions",
+        unit="Likert 1-5",
+        valid_range=(1, 5),
+        is_primary=False,
+        sensor="questionnaire",
+    ),
+    "workload.more_effort_than_resources": create_outcome_info(
+        name="workload.more_effort_than_resources",
+        outcome_type=OutcomeType.ORDINAL,
+        level=AnalysisLevel.DAILY,
+        transform=TransformType.NONE,
+        description="Daily workload: More effort than resources",
+        unit="Likert 1-5",
+        valid_range=(1, 5),
+        is_primary=False,
+        sensor="questionnaire",
+    ),
+    "workload.heavy_workload": create_outcome_info(
+        name="workload.heavy_workload",
+        outcome_type=OutcomeType.ORDINAL,
+        level=AnalysisLevel.DAILY,
+        transform=TransformType.NONE,
+        description="Daily workload: Heavy workload",
+        unit="Likert 1-5",
+        valid_range=(1, 5),
+        is_primary=False,
+        sensor="questionnaire",
+    ),
+    
+    # --- Environmental Quality ---
+    "environmental.Nível de Iluminação": create_outcome_info(
+        name="environmental.Nível de Iluminação",
+        outcome_type=OutcomeType.PROPORTION,
+        level=AnalysisLevel.SINGLE,
+        transform=TransformType.LOGIT,
+        description="Environmental: Illumination level satisfaction",
+        unit="proportion 0-1",
+        valid_range=(0, 1),
+        is_primary=False,
+        sensor="questionnaire",
+    ),
+    "environmental.Ruído": create_outcome_info(
+        name="environmental.Ruído",
+        outcome_type=OutcomeType.PROPORTION,
+        level=AnalysisLevel.SINGLE,
+        transform=TransformType.LOGIT,
+        description="Environmental: Noise satisfaction",
+        unit="proportion 0-1",
+        valid_range=(0, 1),
+        is_primary=False,
+        sensor="questionnaire",
+    ),
+}
+
+
 # Global mutable registry (populated from defaults)
-OUTCOME_REGISTRY: Dict[str, OutcomeInfo] = dict(_DEFAULT_EMG_OUTCOMES)
+OUTCOME_REGISTRY: Dict[str, OutcomeInfo] = {
+    **_DEFAULT_EMG_OUTCOMES,
+    **_DEFAULT_QUESTIONNAIRE_OUTCOMES,
+}
 
 
 # =============================================================================
@@ -484,8 +752,29 @@ def get_count_outcomes() -> List[str]:
     return list_outcomes(outcome_type=OutcomeType.COUNT)
 
 
+def get_questionnaire_outcomes() -> List[str]:
+    """Get list of questionnaire outcome names."""
+    return list_outcomes(sensor="questionnaire")
+
+
+def get_emg_outcomes() -> List[str]:
+    """Get list of EMG outcome names."""
+    return list_outcomes(sensor="emg")
+
+
+def get_daily_outcomes() -> List[str]:
+    """Get list of daily-level outcome names."""
+    return list_outcomes(level=AnalysisLevel.DAILY)
+
+
+def get_single_instance_outcomes() -> List[str]:
+    """Get list of single-instance (baseline) outcome names."""
+    return list_outcomes(level=AnalysisLevel.SINGLE)
+
+
 def reset_registry() -> None:
-    """Reset registry to default EMG outcomes."""
+    """Reset registry to default outcomes (EMG + questionnaire)."""
     global OUTCOME_REGISTRY
     OUTCOME_REGISTRY.clear()
     OUTCOME_REGISTRY.update(_DEFAULT_EMG_OUTCOMES)
+    OUTCOME_REGISTRY.update(_DEFAULT_QUESTIONNAIRE_OUTCOMES)
