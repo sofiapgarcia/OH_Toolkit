@@ -185,10 +185,16 @@ def check_normality(
             })
             continue
         
-        # Shapiro-Wilk (limited to 5000 samples)
-        test_values = values.values[:5000] if n > 5000 else values.values
+        # Shapiro-Wilk (limited to 5000 samples due to scipy constraint)
+        truncated_for_shapiro = n > 5000
+        test_values = values.values[:5000] if truncated_for_shapiro else values.values
         try:
             shapiro_stat, shapiro_p = stats.shapiro(test_values)
+            if truncated_for_shapiro:
+                warnings.warn(
+                    f"Shapiro-Wilk test for '{outcome}' used first 5000 of {n} samples. "
+                    f"Consider using visual diagnostics or Jarque-Bera for large samples."
+                )
         except Exception:
             shapiro_stat, shapiro_p = np.nan, np.nan
         
@@ -299,7 +305,17 @@ def check_variance(
         n_unique = values.nunique()
         std = values.std()
         mean = values.mean()
-        cv = std / abs(mean) if mean != 0 else np.inf
+        
+        # Calculate CV carefully:
+        # - If mean is 0 but std > 0, data is centered at zero with variance (potentially valid)
+        # - If both mean and std are ~0, it's degenerate
+        if mean == 0:
+            if std == 0:
+                cv = 0.0  # Constant at zero - degenerate
+            else:
+                cv = np.inf  # Centered at zero with variance - flag for review
+        else:
+            cv = std / abs(mean)
         
         # Calculate percentage at mode
         mode_count = values.value_counts().iloc[0] if n_unique > 0 else n

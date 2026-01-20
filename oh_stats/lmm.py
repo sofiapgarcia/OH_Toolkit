@@ -292,7 +292,10 @@ def fit_lmm(
                 fixed_effects.append("C(side)")
         
         # Quote outcome column name if it contains special characters
-        outcome_formula = f"Q('{outcome_col}')" if "." in outcome_col else outcome_col
+        # Characters that break statsmodels formulas: . [ ] ( ) + - * / : ^ | ~ space
+        special_chars = set('.[]()+-*/:^|~ ')
+        needs_quoting = any(c in outcome_col for c in special_chars)
+        outcome_formula = f"Q('{outcome_col}')" if needs_quoting else outcome_col
         
         if not fixed_effects:
             # Intercept-only model

@@ -91,10 +91,24 @@ def list_subjects(profiles: Dict[str, dict]) -> List[str]:
     """
     Get sorted list of subject IDs from loaded profiles.
     
+    Sorting logic:
+    - Primarily by numeric portion of ID (if any)
+    - Secondarily by full string (alphabetically) for IDs without numbers
+    
     :param profiles: Dictionary mapping subject_id -> profile dict.
     :returns: Sorted list of subject IDs.
     """
-    return sorted(profiles.keys(), key=lambda x: int(''.join(filter(str.isdigit, x)) or 0))
+    def sort_key(x: str):
+        # Extract numeric portion
+        digits = ''.join(filter(str.isdigit, x))
+        if digits:
+            # Has numbers: sort by number first, then by full string for ties
+            return (0, int(digits), x)
+        else:
+            # No numbers: sort alphabetically after all numeric IDs
+            return (1, 0, x)
+    
+    return sorted(profiles.keys(), key=sort_key)
 
 def get_profile(profiles: Dict[str, dict], subject_id: str) -> Optional[dict]:
     """

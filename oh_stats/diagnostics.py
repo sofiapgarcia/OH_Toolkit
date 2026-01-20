@@ -237,9 +237,19 @@ def _check_homoscedasticity(
     if residuals is None or fitted is None:
         return {"note": "Missing data", "is_ok": None}
     
-    # Align indices
+    # Align indices safely
     residuals = residuals.dropna()
-    fitted = fitted.loc[residuals.index]
+    
+    # Ensure fitted values index matches residuals
+    common_idx = residuals.index.intersection(fitted.index)
+    if len(common_idx) < len(residuals):
+        warnings.warn(
+            f"Index mismatch: {len(residuals) - len(common_idx)} residuals have no matching fitted values. "
+            f"Using {len(common_idx)} aligned observations."
+        )
+    
+    residuals = residuals.loc[common_idx]
+    fitted = fitted.loc[common_idx]
     
     n = len(residuals)
     if n < 10:

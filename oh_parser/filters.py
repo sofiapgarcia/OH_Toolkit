@@ -90,6 +90,30 @@ def apply_subject_filters(
     return result
 
 
+def _parse_date_flexible(date_str: str) -> Optional[datetime]:
+    """
+    Parse a date string supporting multiple formats.
+    
+    Supports:
+    - YYYY-MM-DD (ISO format)
+    - DD-MM-YYYY (EMG data format)
+    - YYYY/MM/DD
+    - DD/MM/YYYY
+    
+    :param date_str: Date string to parse
+    :returns: datetime object or None if parsing fails
+    """
+    formats = ["%Y-%m-%d", "%d-%m-%Y", "%Y/%m/%d", "%d/%m/%Y"]
+    
+    for fmt in formats:
+        try:
+            return datetime.strptime(date_str, fmt)
+        except ValueError:
+            continue
+    
+    return None
+
+
 def filter_date_keys(
     keys: List[str],
     date_range: Optional[Tuple[str, str]] = None,
@@ -97,8 +121,8 @@ def filter_date_keys(
     """
     Filter a list of date keys by date range.
     
-    :param keys: List of keys (some may be dates in YYYY-MM-DD format).
-    :param date_range: (start, end) date strings, inclusive.
+    :param keys: List of keys (some may be dates in YYYY-MM-DD or DD-MM-YYYY format).
+    :param date_range: (start, end) date strings in YYYY-MM-DD format, inclusive.
     :returns: Filtered list of keys.
     """
     if date_range is None:
@@ -106,11 +130,11 @@ def filter_date_keys(
     
     start_str, end_str = date_range
     
-    try:
-        start_date = datetime.strptime(start_str, "%Y-%m-%d")
-        end_date = datetime.strptime(end_str, "%Y-%m-%d")
-    except ValueError:
-        # Invalid date format, return all keys
+    start_date = _parse_date_flexible(start_str)
+    end_date = _parse_date_flexible(end_str)
+    
+    if start_date is None or end_date is None:
+        # Invalid date format in range, return all keys
         return keys
     
     result = []
@@ -120,11 +144,11 @@ def filter_date_keys(
             result.append(key)
             continue
         
-        try:
-            key_date = datetime.strptime(key, "%Y-%m-%d")
+        key_date = _parse_date_flexible(key)
+        if key_date is not None:
             if start_date <= key_date <= end_date:
                 result.append(key)
-        except ValueError:
+        else:
             # Can't parse as date, include it
             result.append(key)
     

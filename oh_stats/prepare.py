@@ -586,6 +586,7 @@ def _handle_sides(
         # Check which subject×date combinations have both sides
         side_counts = df.groupby(["subject_id", "date"])["side"].nunique()
         has_both = side_counts[side_counts == 2].index
+        has_one = side_counts[side_counts == 1].index
         
         if len(has_both) == 0:
             warnings.warn("No subject×date combinations have both sides. Returning all data.")
@@ -602,11 +603,17 @@ def _handle_sides(
         # Group and average
         df_avg = df_both.groupby(meta_cols)[numeric_cols].mean().reset_index()
         
-        n_dropped = len(df) - len(df_both)
-        if n_dropped > 0:
+        # Report data loss in detail
+        n_rows_dropped = len(df) - len(df_both)
+        n_subjects_affected = df.loc[df.set_index(["subject_id", "date"]).index.isin(has_one)]["subject_id"].nunique()
+        n_obs_lost = len(has_one)  # Number of subject×date combinations lost
+        
+        if n_rows_dropped > 0:
             warnings.warn(
-                f"Dropped {n_dropped} rows where only one side existed. "
-                f"Kept {len(df_avg)} averaged observations."
+                f"Side averaging dropped {n_rows_dropped} rows ({n_obs_lost} subject×date observations) "
+                f"where only one side existed. {n_subjects_affected} subject(s) affected. "
+                f"Kept {len(df_avg)} averaged observations. "
+                f"Consider using side='both' to retain all data."
             )
         
         return df_avg, []

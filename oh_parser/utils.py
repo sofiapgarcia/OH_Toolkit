@@ -176,7 +176,7 @@ def print_tree(
 
 def is_date_key(key: str) -> bool:
     """
-    Check if a key looks like a date (YYYY-MM-DD format).
+    Check if a key looks like a date (YYYY-MM-DD or DD-MM-YYYY format).
     
     :param key: Key string to check.
     :returns: True if key matches date pattern.
@@ -187,8 +187,17 @@ def is_date_key(key: str) -> bool:
     if len(parts) != 3:
         return False
     try:
-        year, month, day = int(parts[0]), int(parts[1]), int(parts[2])
-        return 1900 <= year <= 2100 and 1 <= month <= 12 and 1 <= day <= 31
+        p0, p1, p2 = int(parts[0]), int(parts[1]), int(parts[2])
+        
+        # Check YYYY-MM-DD format
+        if 1900 <= p0 <= 2100 and 1 <= p1 <= 12 and 1 <= p2 <= 31:
+            return True
+        
+        # Check DD-MM-YYYY format
+        if 1 <= p0 <= 31 and 1 <= p1 <= 12 and 1900 <= p2 <= 2100:
+            return True
+        
+        return False
     except ValueError:
         return False
 

@@ -232,6 +232,7 @@ def pairwise_contrasts(
     levels = emmeans["level"].tolist()
     
     rows = []
+    se_is_approximate = False  # Track if we had to use approximation
     
     for level1, level2 in combinations(levels, 2):
         # Get emmeans for both levels
@@ -246,19 +247,21 @@ def pairwise_contrasts(
         coef1 = f"C({factor_col})[T.{level1}]"
         coef2 = f"C({factor_col})[T.{level2}]"
         
-        var_diff = 0
-        
-        # This is approximate - proper implementation would use
-        # the full covariance matrix of the emmeans
         se1 = emmeans[emmeans["level"] == level1]["se"].values[0]
         se2 = emmeans[emmeans["level"] == level2]["se"].values[0]
         
-        # Assume independence (conservative) or use model covariance
+        # Start with sum of variances (assumes independence)
         var_diff = se1**2 + se2**2
         
-        # Try to get covariance from model
-        if coef1 in cov.index and coef2 in cov.index:
+        # Try to incorporate covariance from model (makes SE smaller if positively correlated)
+        # Note: This only works for non-reference levels; reference level contrasts use approximation
+        covariance_available = coef1 in cov.index and coef2 in cov.index
+        if covariance_available:
             var_diff -= 2 * cov.loc[coef1, coef2]
+        else:
+            # For contrasts involving reference level, we use independence assumption
+            # This may be anti-conservative if levels are positively correlated
+            se_is_approximate = True
         
         se_diff = np.sqrt(max(var_diff, 0))
         
@@ -279,6 +282,14 @@ def pairwise_contrasts(
         })
     
     contrasts_df = pd.DataFrame(rows)
+    
+    # Warn if approximation was used
+    if se_is_approximate:
+        warnings.warn(
+            f"SE for some contrasts involving the reference level were computed assuming "
+            f"independence, which may be anti-conservative (underestimate SE) if levels "
+            f"are positively correlated. Interpret p-values with caution."
+        )
     
     # Apply multiplicity correction
     if not contrasts_df.empty and correction != "none":
