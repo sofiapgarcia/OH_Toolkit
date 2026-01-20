@@ -114,11 +114,13 @@ print(describe_dataset(ds))
 
 # Validation
 print("\n--- validate_dataset() ---")
-is_valid, issues = validate_dataset(ds)
-print(f"  Valid: {is_valid}")
-if issues:
-    for issue in issues[:3]:
-        print(f"  - {issue}")
+try:
+    validated_ds = validate_dataset(ds)
+    print(f"  Valid: True (no exceptions raised)")
+    print(f"  Outcomes validated: {len(validated_ds['outcome_vars'])}")
+except ValueError as e:
+    print(f"  Valid: False")
+    print(f"  Error: {e}")
 
 # Quick accessors
 print("\n--- Quick Accessors ---")

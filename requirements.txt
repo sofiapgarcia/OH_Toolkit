@@ -4,3 +4,4 @@ pandas>=1.5.0
 statsmodels>=0.14.0
 scipy>=1.10.0
 pingouin>=0.5.3
+jinja2
