@@ -1,20 +1,20 @@
+# imports
 from oh_parser import (
     load_profiles,
     list_subjects,
     extract_nested)
 import pandas as pd
 
+# internal imports
 from utils import autofill_nan_groups
-from kde_plots import kde_by_weekday_and_session_order
+from kde_plots import kde_plots
 
+# Path for OH profiles
 OH_PROFILES_PATH = r"C:\Users\Sofia\Desktop\oh_profile"
+# Set of profiles
 profiles = load_profiles(OH_PROFILES_PATH)
 
-subjects = list_subjects(profiles)
-print(f"Subjects: {subjects}")
-print(f"Total: {len(subjects)} subjects\n")
-
-
+# df with heart rate features
 df_heart = extract_nested(
     profiles,
     base_path="sensor_metrics.heart_rate",
@@ -27,6 +27,7 @@ df_heart = extract_nested(
     exclude_patterns=["HR_timeline"]
 )
 
+# df with wrist features
 df_wrist = extract_nested(
     profiles,
     base_path="sensor_metrics.wrist_activities",
@@ -38,6 +39,8 @@ df_wrist = extract_nested(
     ],
     exclude_patterns=[]
 )
+
+# df with the features from smartwatch data
 df_smartwatch = pd.merge(
     df_heart,
     df_wrist,
@@ -45,15 +48,9 @@ df_smartwatch = pd.merge(
     how="outer"
 )
 
-
-
 df_smartwatch = autofill_nan_groups(df_smartwatch)
 
-print(f"\nSession-level DataFrame shape: {df_heart.shape}")
-print(f"Columns: {df_heart.columns.tolist()}")
-print("\nFirst 10 rows:")
-print(df_heart.head(10))
-
+# df with the noise features
 df_noise = extract_nested(
     profiles,
     base_path="sensor_metrics.noise",
@@ -68,6 +65,7 @@ df_noise = extract_nested(
     ]
 )
 
+# df with human activity faetures
 df_human = extract_nested(
     profiles,
     base_path="sensor_metrics.human_activities",
@@ -82,6 +80,7 @@ df_human = extract_nested(
     ]
 )
 
+# df with smartphone features
 df_smartphone = pd.merge(
     df_human,
     df_noise,
@@ -91,7 +90,7 @@ df_smartphone = pd.merge(
 
 df_smartphone = autofill_nan_groups(df_smartphone)
 
-print(df_smartphone.head())
+# PLOTS
 
-kde_by_weekday_and_session_order(df_smartphone, "HAR_distributions.Sentado")
+kde_plots(df_smartphone, "HAR_distributions.Sentado")
 #kde_by_weekday_and_session_order(df_smartwatch, "HR_BPM_stats.std")
