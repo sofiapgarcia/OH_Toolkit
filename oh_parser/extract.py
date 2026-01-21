@@ -71,13 +71,14 @@ def extract_nested(
     exclude_patterns: Optional[List[str]] = None,
     flatten_values: bool = True,
     include_subject_id: bool = True,
+    include_work_type: bool = True,
 ) -> pd.DataFrame:
     """
     Extract nested structures into a long-format DataFrame.
-    
+
     Iterates through nested levels (dates, sessions, sides, etc.) and extracts
     values from each leaf, producing one row per combination.
-    
+
     :param profiles: Dictionary mapping subject_id -> profile dict.
     :param base_path: Starting path (e.g., "sensor_metrics.emg").
     :param level_names: Names for each nesting level (e.g., ["date", "session", "side"]).
@@ -88,7 +89,7 @@ def extract_nested(
     :param flatten_values: If True, flatten nested value dicts into columns.
     :param include_subject_id: Whether to include subject_id column.
     :returns: Long-format DataFrame with one row per leaf node.
-    
+
     Example:
         >>> extract_nested(
         ...     profiles,
@@ -100,33 +101,42 @@ def extract_nested(
     """
     filtered_profiles = apply_subject_filters(profiles, filters)
     exclude_patterns = exclude_patterns or []
-    
     rows = []
-    
+
     for subject_id, profile in filtered_profiles.items():
-        # Get the base data
         base_data = resolve_path(profile, base_path)
         if base_data is None or not isinstance(base_data, dict):
             continue
-        
-        # Recursively iterate through levels
+
+        context = {}
+
+        if include_subject_id:
+            context["subject_id"] = subject_id
+
+        if include_work_type:
+            context["work_type"] = resolve_path(profile, "meta_data.work_type")
+
         _extract_levels(
             data=base_data,
             level_names=level_names,
             level_idx=0,
-            context={"subject_id": subject_id} if include_subject_id else {},
+            context=context,
             value_paths=value_paths,
             exclude_patterns=exclude_patterns,
             flatten_values=flatten_values,
             rows=rows,
             filters=filters,
         )
-    
+
     if not rows:
-        # Return empty DataFrame with expected columns
-        columns = (["subject_id"] if include_subject_id else []) + level_names
+        columns = []
+        if include_subject_id:
+            columns.append("subject_id")
+        if include_work_type:
+            columns.append("work_type")
+        columns += level_names
         return pd.DataFrame(columns=columns)
-    
+
     return pd.DataFrame(rows)
 
 
@@ -143,13 +153,13 @@ def _extract_levels(
 ) -> None:
     """
     Recursive helper to iterate through nested levels.
-    
+
     Internal function - do not call directly.
     """
     if level_idx >= len(level_names):
         # At leaf level - extract values
         row = context.copy()
-        
+
         if value_paths is None:
             # Extract all values from current dict
             if flatten_values and isinstance(data, dict):
@@ -180,32 +190,32 @@ def _extract_levels(
                         row.update(flat)
                     else:
                         row[vpath] = value
-        
+
         rows.append(row)
         return
-    
+
     # Not at leaf - iterate through keys at this level
     current_level_name = level_names[level_idx]
-    
+
     if not isinstance(data, dict):
         return
-    
+
     # Get keys, apply exclusions
     keys = list(data.keys())
     keys = exclude_keys(keys, exclude_patterns)
-    
+
     # Apply date filtering if this looks like a date level
     if filters and filters.get("date_range"):
         keys = filter_date_keys(keys, filters["date_range"])
-    
+
     for key in keys:
         child_data = data[key]
         if not isinstance(child_data, dict):
             continue
-        
+
         new_context = context.copy()
         new_context[current_level_name] = key
-        
+
         _extract_levels(
             data=child_data,
             level_names=level_names,
@@ -228,10 +238,10 @@ def extract_flat(
 ) -> pd.DataFrame:
     """
     Extract all values under a base path into a fully flattened DataFrame.
-    
+
     Creates columns using dot-notation for all nested keys.
     One row per subject.
-    
+
     :param profiles: Dictionary mapping subject_id -> profile dict.
     :param base_path: Starting path (e.g., "sensor_metrics.emg.EMG_weekly_metrics").
     :param filters: Optional extraction filters.
@@ -240,25 +250,25 @@ def extract_flat(
     :returns: Wide-format DataFrame with flattened columns.
     """
     filtered_profiles = apply_subject_filters(profiles, filters)
-    
+
     rows = []
     for subject_id, profile in filtered_profiles.items():
         data = resolve_path(profile, base_path)
         if data is None:
             continue
-        
+
         row = {}
         if include_subject_id:
             row["subject_id"] = subject_id
-        
+
         if isinstance(data, dict):
             flat = flatten_dict(data, sep=".", max_depth=max_depth)
             row.update(flat)
         else:
             row[base_path] = data
-        
+
         rows.append(row)
-    
+
     return pd.DataFrame(rows)
 
 
@@ -269,22 +279,22 @@ def get_available_paths(
 ) -> List[str]:
     """
     Get all available paths from a single profile.
-    
+
     :param profile: Single OH profile dictionary.
     :param base_path: Starting path (empty for root).
     :param max_depth: Maximum depth to traverse.
     :returns: List of all dot-notation paths.
     """
-    
+
     data = resolve_path(profile, base_path) if base_path else profile
     if not isinstance(data, dict):
         return [base_path] if base_path else []
-    
+
     paths = get_nested_keys(data, max_depth=max_depth)
-    
+
     if base_path:
         paths = [f"{base_path}.{p}" for p in paths]
-    
+
     return paths
 
 
@@ -296,20 +306,20 @@ def inspect_profile(
 ) -> None:
     """
     Pretty-print the structure of a profile.
-    
+
     :param profile: Single OH profile dictionary.
     :param base_path: Starting path (empty for root).
     :param max_depth: Maximum depth to display.
     :param show_values: Whether to show leaf values.
     """
-    
+
     data = resolve_path(profile, base_path) if base_path else profile
-    
+
     if base_path:
         print(f"Structure at '{base_path}':")
     else:
         print("Profile structure:")
-    
+
     print_tree(data, max_depth=max_depth, show_values=show_values)
 
 
@@ -319,7 +329,7 @@ def summarize_profiles(
 ) -> pd.DataFrame:
     """
     Generate a summary of all profiles showing data availability.
-    
+
     :param profiles: Dictionary mapping subject_id -> profile dict.
     :param check_paths: Specific paths to check for (None = use defaults).
     :returns: DataFrame with one row per subject showing which data is available.
@@ -335,7 +345,7 @@ def summarize_profiles(
             "sensor_timeline",
             "human_activities",
         ]
-    
+
     rows = []
     for subject_id, profile in profiles.items():
         row: Dict[str, Any] = {"subject_id": subject_id}
@@ -344,5 +354,5 @@ def summarize_profiles(
             col_name = path.split(".")[-1] if "." in path else path
             row[f"has_{col_name}"] = path_exists(profile, path)
         rows.append(row)
-    
+
     return pd.DataFrame(rows).sort_values("subject_id", ignore_index=True)
