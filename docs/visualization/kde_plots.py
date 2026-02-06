@@ -1,9 +1,32 @@
+"""
+Functions to generate kde plots per metric.
+
+Available Functions
+-------------------
+[Public]
+kde_plots(...): Plot KDE distributions for a given metric.
+
+------------------
+[Private]
+
+------------------
+"""
+# ------------------------------------------------------------------------------------------------------------------- #
+# imports
+# ------------------------------------------------------------------------------------------------------------------- #
+
 import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 
+# internal imports
 from constants import METRIC_READABLE_MAP
+
+
+# ------------------------------------------------------------------------------------------------------------------- #
+# file specific constants
+# ------------------------------------------------------------------------------------------------------------------- #
 
 # Map weekdays to Portuguese
 weekday_pt_map = {
@@ -23,10 +46,13 @@ session_labels = ["I", "II", "III", "IV"]
 # Color palette
 palette = {"BO": "#1f77b4", "FO": "#d62728"}
 
+# ------------------------------------------------------------------------------------------------------------------- #
+# public functions
+# ------------------------------------------------------------------------------------------------------------------- #
 
 def kde_plots(df, metric):
     """
-    Plot KDE distributions for a given metric, grouped by weekday and session order per subject.
+    Plot KDE distributions for a given metric, grouped by weekday and session order per subject in case of per session data.
 
     If multiple sessions exist, the y-axis shows the session order with labels (I, II, III, IV).
     If only one session exists, the y-axis is labeled as 'Densidade de probabilidade' and session labels are hidden.
@@ -51,7 +77,7 @@ def kde_plots(df, metric):
         data["session"], format="%H-%M-%S", errors="coerce"
     ).dt.time
 
-    # Extract weekday name in English
+    # Extract weekday name
     data["weekday_en"] = data["date"].dt.day_name()
 
     # Map weekdays to Portuguese
@@ -120,7 +146,6 @@ def kde_plots(df, metric):
     for ax, day in zip(bottom_axes, weekday_order_pt):
         ax.set_xlabel(day, fontsize=11)
 
-    # Remove Seaborn's automatic 'Density' y-label if only one session
     if unique_sessions == 1:
         for ax in bottom_axes:
             ax.set_ylabel("")
@@ -147,6 +172,5 @@ def kde_plots(df, metric):
 
     # Display the plot
     plt.show()
-
 
 

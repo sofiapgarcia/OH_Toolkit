@@ -1,7 +1,6 @@
 # imports
 from oh_parser import (
     load_profiles,
-    list_subjects,
     extract_nested)
 import pandas as pd
 
@@ -10,7 +9,7 @@ from utils import autofill_nan_groups
 from kde_plots import kde_plots
 
 # Path for OH profiles
-OH_PROFILES_PATH = r"C:\Users\Sofia\Desktop\oh_profile"
+OH_PROFILES_PATH = r"D:\Documents\PrevOccupAI\OH_profiles\OH_profiles"
 # Set of profiles
 profiles = load_profiles(OH_PROFILES_PATH)
 
@@ -93,4 +92,5 @@ df_smartphone = autofill_nan_groups(df_smartphone)
 # PLOTS
 
 kde_plots(df_smartphone, "HAR_distributions.Sentado")
-#kde_by_weekday_and_session_order(df_smartwatch, "HR_BPM_stats.std")
+kde_plots(df_smartwatch, "HR_BPM_stats.max")
+
