@@ -10,8 +10,12 @@ from kde_plots import kde_plots
 
 # Path for OH profiles
 OH_PROFILES_PATH = r"D:\Documents\PrevOccupAI\OH_profiles\OH_profiles"
+# Path for distribution plots
+SAVE_PATH="D:\Documents\PrevOccupAI\plots\distributions"
 # Set of profiles
 profiles = load_profiles(OH_PROFILES_PATH)
+
+# smartwatch data
 
 # df with heart rate features
 df_heart = extract_nested(
@@ -49,6 +53,8 @@ df_smartwatch = pd.merge(
 
 df_smartwatch = autofill_nan_groups(df_smartwatch)
 
+# smartphone data
+
 # df with the noise features
 df_noise = extract_nested(
     profiles,
@@ -64,7 +70,7 @@ df_noise = extract_nested(
     ]
 )
 
-# df with human activity faetures
+# df with human activity features
 df_human = extract_nested(
     profiles,
     base_path="sensor_metrics.human_activities",
@@ -79,18 +85,54 @@ df_human = extract_nested(
     ]
 )
 
-# df with smartphone features
+# df with posture features
+df_posture = extract_nested(
+    profiles,
+    base_path="sensor_metrics.posture",
+    level_names=["date", "session"]
+)
+
+# df with smartphone features without posture data
 df_smartphone = pd.merge(
     df_human,
     df_noise,
     on=["subject_id", "work_type", "date", "session"],
     how="outer"
 )
+# df with smartphone features complete
+df_smartphone = pd.merge(
+    df_posture,
+    df_smartphone,
+    on=["subject_id", "work_type", "date", "session"],
+    how="outer"
+)
 
 df_smartphone = autofill_nan_groups(df_smartphone)
 
-# PLOTS
+# df with emg data
+df_emg = extract_nested(
+    profiles,
+    base_path="sensor_metrics.emg",
+    level_names=["date", "session","side"],
+    value_paths=[
+        "EMG_intensity.*",
+        "EMG_apdf.*",
+        "EMG_rest_recovery.*",
+        "EMG_relative_bins.*"
+    ]
+)
 
-kde_plots(df_smartphone, "HAR_distributions.Sentado")
-kde_plots(df_smartwatch, "HR_BPM_stats.max")
+# PLOTS
+# chose the dataframe to explore
+df = df_smartphone
+
+# columns that do not correspond to metrics
+exclude_cols = ["subject_id", "work_type", "date", "session", "side"]
+
+# list of metrics
+metrics = [col for col in df.columns if col not in exclude_cols]
+
+# Generate KDE plots for each metric
+for metric in metrics:
+    kde_plots(df, metric, save_path=SAVE_PATH)
 

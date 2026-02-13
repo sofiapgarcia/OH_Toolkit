@@ -19,6 +19,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
+import os
 
 # internal imports
 from constants import METRIC_READABLE_MAP
@@ -50,7 +51,7 @@ palette = {"BO": "#1f77b4", "FO": "#d62728"}
 # public functions
 # ------------------------------------------------------------------------------------------------------------------- #
 
-def kde_plots(df, metric):
+def kde_plots(df, metric, save_path=None):
     """
     Plot KDE distributions for a given metric, grouped by weekday and session order per subject in case of per session data.
 
@@ -64,6 +65,8 @@ def kde_plots(df, metric):
                - 'session' (format '%H-%M-%S')
                - the metric column to plot
     :param metric: str, the column name of the metric to plot.
+    :param save_path: str or None. Directory where the figure should be saved.
+                       If provided, the filename is automatically generated from the metric.
     :returns: None. Displays a Seaborn displot with KDE distributions.
     """
 
@@ -168,7 +171,19 @@ def kde_plots(df, metric):
         g._legend.set_title("Tipo de trabalho")
 
     # Apply tight layout
-    plt.tight_layout(rect=[0.05, 0.05, 0.95, 0.94])
+    g.fig.subplots_adjust(
+        left=0.10,
+        right=0.88,
+        bottom=0.12,
+        top=0.92
+    )
+
+    # Save figure if an output directory is provided
+    if save_path is not None:
+        os.makedirs(save_path, exist_ok=True)
+        filename = f"kde_{metric}.png"
+        full_path = os.path.join(save_path, filename)
+        g.fig.savefig(full_path)
 
     # Display the plot
     plt.show()
