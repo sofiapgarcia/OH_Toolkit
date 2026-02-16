@@ -88,6 +88,7 @@ def extract_nested(
     :param exclude_patterns: Patterns to exclude at each level (e.g., ["EMG_*_metrics"]).
     :param flatten_values: If True, flatten nested value dicts into columns.
     :param include_subject_id: Whether to include subject_id column.
+    :param include_work_type: Whether to include work type column.
     :returns: Long-format DataFrame with one row per leaf node.
 
     Example:

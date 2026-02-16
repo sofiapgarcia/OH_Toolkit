@@ -30,8 +30,8 @@ METRIC_READABLE_MAP = {
     "HAR_durations.De pé_duration_sec": "Duração na posição de pé (s)",
     "HAR_durations.Andar_duration_sec": "Duração a andar (s)",
 
-    "HAR_steps_num_steps": "Número total de passos",
-    "HAR_steps_distance_walked_m": "Distância total percorrida a andar (m)",
+    "HAR_steps.num_steps": "Número total de passos",
+    "HAR_steps.distance_walked_m": "Distância total percorrida a andar (m)",
 
     # Noise
     "Noise_distributions.Ruído baixo": "Percentagem de tempo em Ruído baixo",

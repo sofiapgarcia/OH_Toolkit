@@ -15,6 +15,8 @@ SAVE_PATH="D:\Documents\PrevOccupAI\plots\distributions"
 # Set of profiles
 profiles = load_profiles(OH_PROFILES_PATH)
 
+# DATA
+
 # smartwatch data
 
 # df with heart rate features
@@ -119,12 +121,13 @@ df_emg = extract_nested(
         "EMG_apdf.*",
         "EMG_rest_recovery.*",
         "EMG_relative_bins.*"
-    ]
+    ],
+    exclude_patterns=["EMG_daily_metrics", "EMG_weekly_metrics"],
 )
 
 # PLOTS
-# chose the dataframe to explore
-df = df_smartphone
+# choose the dataframe to explore
+df = df_emg
 
 # columns that do not correspond to metrics
 exclude_cols = ["subject_id", "work_type", "date", "session", "side"]
