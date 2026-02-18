@@ -1,17 +1,18 @@
 # imports
 from oh_parser import (
     load_profiles,
-    extract_nested)
+    extract_nested, extract)
 import pandas as pd
 
 # internal imports
-from utils import autofill_nan_groups
+from utils import autofill_nan_groups, add_side_column
 from kde_plots import kde_plots
+from constants import EMG_WEEKLY_PATHS
 
 # Path for OH profiles
 OH_PROFILES_PATH = r"D:\Documents\PrevOccupAI\OH_profiles\OH_profiles"
 # Path for distribution plots
-SAVE_PATH="D:\Documents\PrevOccupAI\plots\distributions"
+SAVE_PATH=r"D:\Documents\PrevOccupAI\plots\distributions"
 # Set of profiles
 profiles = load_profiles(OH_PROFILES_PATH)
 
@@ -125,9 +126,29 @@ df_emg = extract_nested(
     exclude_patterns=["EMG_daily_metrics", "EMG_weekly_metrics"],
 )
 
+# extract daily emg data
+df_emg_daily = extract_nested(
+    profiles,
+    base_path="sensor_metrics.emg",
+    level_names=["date", "session","side"],
+    value_paths=[
+            "EMG_intensity.*",
+            "EMG_apdf.*",
+            "EMG_rest_recovery.*",
+            "EMG_relative_bins.*"
+        ],
+    exclude_patterns=["EMG_weekly_metrics"],
+)
+
+df_emg_daily = df_emg_daily.loc[df_emg_daily["session"] == "EMG_daily_metrics"]
+
+# extract weekly emg data
+df_emg_weekly = extract(profiles, paths=EMG_WEEKLY_PATHS)
+df_emg_weekly = add_side_column(df_emg_weekly)
+
 # PLOTS
 # choose the dataframe to explore
-df = df_emg
+df = df_smartwatch
 
 # columns that do not correspond to metrics
 exclude_cols = ["subject_id", "work_type", "date", "session", "side"]
@@ -137,5 +158,5 @@ metrics = [col for col in df.columns if col not in exclude_cols]
 
 # Generate KDE plots for each metric
 for metric in metrics:
-    kde_plots(df, metric, save_path=SAVE_PATH)
+    kde_plots(df, metric, save_path=None)
 

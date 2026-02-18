@@ -28,6 +28,7 @@ def extract(
     paths: Dict[str, str],
     filters: Optional[Dict[str, Any]] = None,
     include_subject_id: bool = True,
+    include_work_type: bool = True,
 ) -> pd.DataFrame:
     """
     Extract specific paths from profiles into a wide-format DataFrame.
@@ -38,6 +39,7 @@ def extract(
     :param paths: Mapping of output column names to dot-notation paths.
     :param filters: Optional extraction filters.
     :param include_subject_id: Whether to include subject_id column.
+    :param include_work_type: Wheter to include work type column.
     :returns: DataFrame with one row per subject.
     
     Example:
@@ -53,6 +55,8 @@ def extract(
         row = {}
         if include_subject_id:
             row["subject_id"] = subject_id
+        if include_work_type:
+            row["work_type"] = resolve_path(profile, "meta_data.work_type")
         
         for col_name, path in paths.items():
             row[col_name] = resolve_path(profile, path)

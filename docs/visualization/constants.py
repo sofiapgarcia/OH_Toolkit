@@ -64,18 +64,18 @@ METRIC_READABLE_MAP = {
     "EMG_intensity.min_percent_mvc": "EMG: Intensidade mínima em %MVC",
     "EMG_intensity.iemg_percent_seconds": "EMG: Percentagem IEMG",
 
-    "EMG_apdf.full_p10": "EMG: Percentil 10 da APDF",
-    "EMG_apdf.full_p50": "EMG: Percentil 50 da APDF",
-    "EMG_apdf.full_p90": "EMG: Percentil 90 da APDF",
+    "EMG_apdf.full.p10": "EMG: Percentil 10 da APDF",
+    "EMG_apdf.full.p50": "EMG: Percentil 50 da APDF",
+    "EMG_apdf.full.p90": "EMG: Percentil 90 da APDF",
 
-    "EMG_apdf.active_p10": "EMG: Percentil 10 da APDF (ativa)",
-    "EMG_apdf.active_p50": "EMG: Percentil 50 da APDF (ativa)",
-    "EMG_apdf.active_p90": "EMG: Percentil 90 da APDF (ativa)",
+    "EMG_apdf.active.p10": "EMG: Percentil 10 da APDF (ativa)",
+    "EMG_apdf.active.p50": "EMG: Percentil 50 da APDF (ativa)",
+    "EMG_apdf.active.p90": "EMG: Percentil 90 da APDF (ativa)",
 
     "EMG_rest_recovery.rest_percent": "EMG: Percentagem de descanso",
     "EMG_rest_recovery.gap_frequency_per_minute": "EMG: Frequência de pausas por minuto",
     "EMG_rest_recovery.max_sustained_activity_s": "EMG: Duração máxima de atividade contínua (s)",
-    "EMG_rest_recovery.gap_count": "EMG: Número de pausas detectadas",
+    "EMG_rest_recovery.gap_count": "EMG: Número de pausas detetadas",
 
     "EMG_relative_bins.below_usual_pct": "EMG: Tempo abaixo do nível habitual (%)",
     "EMG_relative_bins.typical_low_pct": "EMG: Tempo em nível típico baixo (%)",
@@ -83,4 +83,48 @@ METRIC_READABLE_MAP = {
     "EMG_relative_bins.high_for_you_pct": "EMG: Tempo em nível alto pessoal (%)"
 
 
+}
+
+# ------------------------------------------------------------------------------------------------------------------- #
+# Constants for extracting EMG weekly metrics
+# ------------------------------------------------------------------------------------------------------------------- #
+
+EMG_WEEKLY_PATHS = {
+    # LEFT SIDE
+    "EMG_intensity.mean_percent_mvc_L": "sensor_metrics.emg.EMG_weekly_metrics.left.EMG_intensity.mean_percent_mvc",
+    "EMG_intensity.max_percent_mvc_L": "sensor_metrics.emg.EMG_weekly_metrics.left.EMG_intensity.max_percent_mvc",
+    "EMG_intensity.min_percent_mvc_L": "sensor_metrics.emg.EMG_weekly_metrics.left.EMG_intensity.min_percent_mvc",
+    "EMG_intensity.iemg_percent_seconds_L": "sensor_metrics.emg.EMG_weekly_metrics.left.EMG_intensity.iemg_percent_seconds",
+
+    "EMG_apdf.full.p10_L": "sensor_metrics.emg.EMG_weekly_metrics.left.EMG_apdf.full.p10",
+    "EMG_apdf.full.p50_L": "sensor_metrics.emg.EMG_weekly_metrics.left.EMG_apdf.full.p50",
+    "EMG_apdf.full.p90_L": "sensor_metrics.emg.EMG_weekly_metrics.left.EMG_apdf.full.p90",
+
+    "EMG_apdf.active.p10_L": "sensor_metrics.emg.EMG_weekly_metrics.left.EMG_apdf.active.p10",
+    "EMG_apdf.active.p50_L": "sensor_metrics.emg.EMG_weekly_metrics.left.EMG_apdf.active.p50",
+    "EMG_apdf.active.p90_L": "sensor_metrics.emg.EMG_weekly_metrics.left.EMG_apdf.active.p90",
+
+    "EMG_rest_recovery.rest_percent_L": "sensor_metrics.emg.EMG_weekly_metrics.left.EMG_rest_recovery.rest_percent",
+    "EMG_rest_recovery.gap_frequency_per_minute_L": "sensor_metrics.emg.EMG_weekly_metrics.left.EMG_rest_recovery.gap_frequency_per_minute",
+    "EMG_rest_recovery.max_sustained_activity_s_L": "sensor_metrics.emg.EMG_weekly_metrics.left.EMG_rest_recovery.max_sustained_activity_s",
+    "EMG_rest_recovery.gap_count_L": "sensor_metrics.emg.EMG_weekly_metrics.left.EMG_rest_recovery.gap_count",
+
+    # RIGHT SIDE
+    "EMG_intensity.mean_percent_mvc_R": "sensor_metrics.emg.EMG_weekly_metrics.right.EMG_intensity.mean_percent_mvc",
+    "EMG_intensity.max_percent_mvc_R": "sensor_metrics.emg.EMG_weekly_metrics.right.EMG_intensity.max_percent_mvc",
+    "EMG_intensity.min_percent_mvc_R": "sensor_metrics.emg.EMG_weekly_metrics.right.EMG_intensity.min_percent_mvc",
+    "EMG_intensity.iemg_percent_seconds_R": "sensor_metrics.emg.EMG_weekly_metrics.right.EMG_intensity.iemg_percent_seconds",
+
+    "EMG_apdf.full.p10_R": "sensor_metrics.emg.EMG_weekly_metrics.right.EMG_apdf.full.p10",
+    "EMG_apdf.full.p50_R": "sensor_metrics.emg.EMG_weekly_metrics.right.EMG_apdf.full.p50",
+    "EMG_apdf.full.p90_R": "sensor_metrics.emg.EMG_weekly_metrics.right.EMG_apdf.full.p90",
+
+    "EMG_apdf.active.p10_R": "sensor_metrics.emg.EMG_weekly_metrics.right.EMG_apdf.active.p10",
+    "EMG_apdf.active.p50_R": "sensor_metrics.emg.EMG_weekly_metrics.right.EMG_apdf.active.p50",
+    "EMG_apdf.active.p90_R": "sensor_metrics.emg.EMG_weekly_metrics.right.EMG_apdf.active.p90",
+
+    "EMG_rest_recovery.rest_percent_R": "sensor_metrics.emg.EMG_weekly_metrics.right.EMG_rest_recovery.rest_percent",
+    "EMG_rest_recovery.gap_frequency_per_minute_R": "sensor_metrics.emg.EMG_weekly_metrics.right.EMG_rest_recovery.gap_frequency_per_minute",
+    "EMG_rest_recovery.max_sustained_activity_s_R": "sensor_metrics.emg.EMG_weekly_metrics.right.EMG_rest_recovery.max_sustained_activity_s",
+    "EMG_rest_recovery.gap_count_R": "sensor_metrics.emg.EMG_weekly_metrics.right.EMG_rest_recovery.gap_count",
 }
